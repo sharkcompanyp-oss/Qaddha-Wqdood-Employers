@@ -1,10 +1,11 @@
 import mongoose from "mongoose";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const connectDB = async () => {
   try {
-    await mongoose.connect(
-      "mongodb+srv://sharkdigitals:N3GTllwiN8Usq4aW@node-js.ziclaak.mongodb.net/?retryWrites=true&w=majority&appName=Node-JS"
-    );
+    await mongoose.connect(process.env.MONGO_URI);
     console.log("===== CONNECTED SUCCESSFULLY =====");
   } catch (error) {
     console.error("===== CONNECTION ERROR: ", error);
