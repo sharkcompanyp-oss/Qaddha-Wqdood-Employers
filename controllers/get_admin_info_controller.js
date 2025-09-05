@@ -6,7 +6,7 @@ import Admin from "../models/Admin.js";
 
 export const Get_Admin_Info = async (req, res) => {
   try {
-    let The_Admin = await Admin.findOne(); // جلب أول أدمن
+    let The_Admin = await Admin.findOne();
 
     // إذا ما في بيانات، منضيف الأدمن لأول مرة
     if (!The_Admin) {
