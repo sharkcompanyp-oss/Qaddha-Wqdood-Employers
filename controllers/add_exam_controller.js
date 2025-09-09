@@ -5,7 +5,8 @@ import Exams from "../models/exam.js";
  */
 export const Add_Exam = async (req, res) => {
   try {
-    const { name, ID, college_id, info, questions, time, visible } = req.body;
+    const { name, ID, college_id, info, questions, time, visible, price } =
+      req.body;
     const New_Exam = new Exams({
       name: name,
       ID: ID,
@@ -15,6 +16,8 @@ export const Add_Exam = async (req, res) => {
       time: time,
       visible: visible || false,
       available_to: [],
+      open_mode: false,
+      price: price || 0,
     });
     await New_Exam.save();
     res.status(200).json({ message: "تمت إضافة الاختبار" });
