@@ -1,5 +1,9 @@
 import Exams from "../models/exam.js";
 import Admin from "../models/Admin.js";
+import dotenv from "dotenv";
+
+dotenv.config();
+
 /**
  * @param {import('express').Request} req
  * @param {import('express').Response} res
@@ -17,7 +21,13 @@ export const Update_Exam = async (req, res) => {
       new_available_to,
       new_open_mode,
       new_price,
+      PASSWORD,
     } = req.body;
+
+    if (!PASSWORD || PASSWORD !== process.env.PASSWORD) {
+      res.status(401).json({ message: "تعذر تحديث الاختبار" });
+    }
+
     const The_Exam = await Exams.findOne({ ID: ID });
     if (!The_Exam) {
       return res.status(404).json({ message: "الاختبار غير موجود" });
