@@ -15,6 +15,7 @@ const SUBJECTS_SCHEMA = mongoose.Schema({
         question: { type: String, required: true },
         options: { type: [String], required: true },
         answer: { type: String, required: true },
+        lecture: { type: String, required: false, default: "" },
       },
     ],
   },
