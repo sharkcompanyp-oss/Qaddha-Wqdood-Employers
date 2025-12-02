@@ -1,5 +1,4 @@
 import Exams from "../models/exam.js";
-import Admin from "../models/Admin.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -42,36 +41,6 @@ export const Update_Exam = async (req, res) => {
     const clean_old_available_to = The_Exam.available_to.filter(
       (x) => x !== null && x !== undefined && x !== ""
     );
-
-    const The_New_Subscribers =
-      Number(clean_new_available_to.length) -
-      Number(clean_old_available_to.length);
-
-    if (The_New_Subscribers > 0) {
-      const The_Admin = await Admin.findOne();
-      if (!The_Admin) {
-        return res.status(500).json({ message: "حساب الأدمن غير موجود" });
-      }
-      The_Admin.total_profit += The_New_Subscribers * Number(new_price);
-
-      const existingProfit = The_Admin.profits.find(
-        (profit) => profit.subject_id === ID
-      );
-
-      if (!existingProfit) {
-        The_Admin.profits.push({
-          subject_id: ID,
-          price: new_price,
-          subscribers: clean_new_available_to.length,
-        });
-      } else {
-        existingProfit.price = new_price;
-        existingProfit.subscribers = clean_new_available_to.length;
-      }
-
-      await The_Admin.save();
-    }
-
     The_Exam.ID = new_id;
     The_Exam.name = new_name;
     The_Exam.info = new_info;
