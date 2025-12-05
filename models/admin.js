@@ -6,4 +6,4 @@ const ADMIN_SCHEMA = mongoose.Schema({
   total_profit: { type: Number, required: false, default: 0 },
 });
 
-export default mongoose.model("Admin", ADMIN_SCHEMA);
+export default mongoose.model("admin", ADMIN_SCHEMA);

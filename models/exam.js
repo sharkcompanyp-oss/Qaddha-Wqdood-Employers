@@ -9,7 +9,11 @@ const SUBJECTS_SCHEMA = mongoose.Schema({
   available_to: { type: Array, default: [] },
   open_mode: { type: Boolean, default: false },
   price: { type: Number, default: 0 },
-  admin_id: { type: String, required: false },
+  admin_id: {
+    type: String,
+    required: false,
+    default: "6899f9be9a8b8f6823a6071b",
+  },
   questions: {
     type: [
       {
