@@ -10,6 +10,9 @@ export const Add_Student_To_Exam = async (req, res) => {
     if (!The_Exam) {
       return res.status(404).json({ message: "الاختبار غير موجود" });
     }
+    if (!STUDENT_ID || !EXAM_ID || STUDENT_ID.trim() === "") {
+      return res.status(404).json({ message: "البيانات ناقصة" });
+    }
     const studentExists = The_Exam.available_to.includes(String(STUDENT_ID));
     if (studentExists) {
       return res.status(400).json({
