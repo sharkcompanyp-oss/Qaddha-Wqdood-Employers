@@ -26,8 +26,10 @@ export const Update_Exam = async (req, res) => {
     if (!PASSWORD || PASSWORD !== process.env.PASSWORD) {
       return res.status(401).json({ message: "تعذر تحديث الاختبار" });
     }
-
-    const The_Exam = await Exams.findOne({ _id: _id });
+    if (!_id) {
+      return res.status(400).json({ message: "رمز المادة ناقص" });
+    }
+    const The_Exam = await Exams.findById(_id);
     if (!The_Exam) {
       return res.status(404).json({ message: "الاختبار غير موجود" });
     }
