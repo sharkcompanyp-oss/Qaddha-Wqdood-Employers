@@ -1,4 +1,4 @@
-import request from "../models/request";
+import request from "../models/request.js";
 export const Get_Requests = async (req, res) => {
   try {
     const Requests = await request.find();

@@ -9,7 +9,6 @@ dotenv.config();
 
 export const Get_Exams = async (req, res) => {
   const { searchTerm, PASSWORD } = req.body;
-
   try {
     let exams;
     if (!PASSWORD || PASSWORD !== process.env.PASSWORD) {
@@ -18,11 +17,9 @@ export const Get_Exams = async (req, res) => {
     if (searchTerm) {
       const regex = new RegExp(searchTerm, "i"); // بحث غير حساس لحالة الأحرف
       exams = await Exams.find({
-        $or: [
-          { name: regex },
-          { ID: isNaN(searchTerm) ? undefined : Number(searchTerm) },
-        ],
+        $or: [{ name: regex }, { ID: searchTerm }],
       });
+      console.log(exams);
     } else {
       exams = await Exams.find();
     }
