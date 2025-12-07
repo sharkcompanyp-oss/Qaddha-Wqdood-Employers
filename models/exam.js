@@ -12,7 +12,7 @@ const SUBJECTS_SCHEMA = mongoose.Schema({
   admin_id: {
     type: String,
     required: false,
-    default: "6899f9be9a8b8f6823a6071b",
+    default: "6934998caad4fa6ea1e59d31",
   },
   questions: {
     type: [
