@@ -6,7 +6,7 @@ import Subjects from "../models/exam.js";
 export const Add_Student_To_Exam = async (req, res) => {
   try {
     const { STUDENT_ID, EXAM_ID } = req.body;
-    const The_Exam = await Subjects.findOne({ ID: EXAM_ID });
+    const The_Exam = await Subjects.findOne({ _id: EXAM_ID });
     if (!The_Exam) {
       return res.status(404).json({ message: "الاختبار غير موجود" });
     }
