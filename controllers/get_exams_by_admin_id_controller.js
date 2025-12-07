@@ -24,9 +24,8 @@ export const Get_Exams_By_Admin_Id = async (req, res) => {
       filter.name = new RegExp(search_term, "i");
     }
 
-    const exams = await Subject.find(filter);
-    if (!exams) {
-      return req
+    if (!exams || exams.length === 0) {
+      return res
         .status(404)
         .json({ message: "لم تقم بإنشاء أي اختبار حتى الآن" });
     }
