@@ -21,7 +21,7 @@ export const Delete_Exam = async (req, res) => {
       return res.status(400).json({ message: "معرف الاختبار مفقود" });
     }
 
-    const The_Exam = await Exams.findOne({ ID: exam_id });
+    const The_Exam = await Exams.findOne({ _id: exam_id });
 
     // في حال لم يتم العثور على الاختبار
     if (!The_Exam) {
