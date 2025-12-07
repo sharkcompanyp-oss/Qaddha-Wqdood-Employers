@@ -1,4 +1,6 @@
 import Subjects from "../models/exam.js";
+import Admin from "../models/admin.js";
+
 /**
  * @param {import('express').Request} req
  * @param {import('express').Response} res
@@ -6,23 +8,56 @@ import Subjects from "../models/exam.js";
 export const Add_Student_To_Exam = async (req, res) => {
   try {
     const { STUDENT_ID, EXAM_ID } = req.body;
+
+    // التحقق من البيانات
+    if (!STUDENT_ID || !EXAM_ID || STUDENT_ID.trim() === "") {
+      return res.status(400).json({ message: "البيانات ناقصة" });
+    }
+
+    // جلب الامتحان
     const The_Exam = await Subjects.findOne({ _id: EXAM_ID });
     if (!The_Exam) {
       return res.status(404).json({ message: "الاختبار غير موجود" });
     }
-    if (!STUDENT_ID || !EXAM_ID || STUDENT_ID.trim() === "") {
-      return res.status(404).json({ message: "البيانات ناقصة" });
-    }
+
+    // التحقق من وجود الطالب مسبقاً
     const studentExists = The_Exam.available_to.includes(String(STUDENT_ID));
     if (studentExists) {
       return res.status(400).json({
         message: "الطالب مضاف بالفعل لهذا الاختبار",
       });
     }
+
+    // إضافة الطالب للامتحان
     The_Exam.available_to.push(String(STUDENT_ID));
     await The_Exam.save();
-    return res.status(200).json({ message: "تمت إضافة الطالب بنجاح" });
+
+    // ✅ إضافة سعر المادة لأرباح الأدمن
+    if (The_Exam.admin_id && The_Exam.price > 0) {
+      const admin = await Admin.findOne({ _id: The_Exam.admin_id });
+
+      if (admin) {
+        admin.total_profit += The_Exam.price;
+        await admin.save();
+
+        console.log(
+          `✅ تم إضافة ${The_Exam.price} ل.س لأرباح الأدمن ${admin.name}`
+        );
+      } else {
+        console.warn(`⚠️ لم يتم العثور على الأدمن بـ ID: ${The_Exam.admin_id}`);
+      }
+    }
+
+    return res.status(200).json({
+      message: "تمت إضافة الطالب بنجاح",
+      exam: {
+        name: The_Exam.name,
+        price: The_Exam.price,
+        studentsCount: The_Exam.available_to.length,
+      },
+    });
   } catch (error) {
-    res.status(500).json({ message: "تحقق من اتصالك بالانترنت" });
+    console.error("Error in Add_Student_To_Exam:", error);
+    return res.status(500).json({ message: "تحقق من اتصالك بالانترنت" });
   }
 };
