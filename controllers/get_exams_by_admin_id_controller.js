@@ -4,12 +4,7 @@ dotenv.config();
 
 export const Get_Exams_By_Admin_Id = async (req, res) => {
   try {
-    const { _id, search_term, PASSWORD } = req.body;
-
-    // التحقق من كلمة المرور
-    if (!PASSWORD || PASSWORD !== process.env.PASSWORD) {
-      return res.status(401).json({ message: "تعذر جلب الاختبار" });
-    }
+    const { _id, search_term } = req.body;
 
     // التحقق من وجود `_id`
     if (!_id) {

@@ -20,11 +20,8 @@ export const Update_Exam = async (req, res) => {
       new_available_to,
       new_open_mode,
       new_price,
-      PASSWORD,
     } = req.body;
-    if (!PASSWORD || PASSWORD !== process.env.PASSWORD) {
-      return res.status(401).json({ message: "تعذر تحديث الاختبار" });
-    }
+
     if (!_id) {
       return res.status(400).json({ message: "رمز المادة ناقص" });
     }
