@@ -5,11 +5,10 @@ import Exams from "../models/exam.js";
  */
 export const Add_Exam = async (req, res) => {
   try {
-    const { name, ID, college_id, info, questions, time, visible, price } =
+    const { name, college_id, info, questions, time, visible, price } =
       req.body;
     const New_Exam = new Exams({
       name: name,
-      ID: ID,
       college_id: college_id,
       info: info,
       questions: questions,
