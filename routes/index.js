@@ -13,6 +13,7 @@ import { Get_Requests } from "../controllers/get_requests_controller.js";
 import { Get_Exams_By_Admin_Id } from "../controllers/get_exams_by_admin_id_controller.js";
 import { Reject_Request } from "../controllers/reject_request_controller.js";
 import { Accept_Request } from "../controllers/accept_request_controller.js";
+import { Get_Analytics } from "../controllers/analytics_controller.js";
 
 const router = express.Router();
 
@@ -30,5 +31,6 @@ router.get("/getrequests", Get_Requests);
 router.post("/getexamsbyadminid", Get_Exams_By_Admin_Id);
 router.delete("/rejectrequest", Reject_Request);
 router.post("/acceptrequest", Accept_Request);
+router.get("/analytics", Get_Analytics);
 
 export default router;
