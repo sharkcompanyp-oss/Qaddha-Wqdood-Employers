@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 const SUBJECTS_SCHEMA = mongoose.Schema({
   name: { type: String, required: true },
-  ID: { type: String, required: true },
+  ID: { type: String, required: false },
   college_id: { type: Number, required: true },
   info: { type: String },
   time: { type: Number, required: true },
