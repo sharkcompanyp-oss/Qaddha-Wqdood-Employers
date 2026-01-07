@@ -15,10 +15,6 @@ app.use(express.json({ limit: "10mb" })); // أو أكثر حسب الحاجة
 app.use(express.urlencoded({ extended: true }));
 app.use("/", router);
 
-app.use("/health", (req, res) => {
-  res.send("K");
-});
-
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
