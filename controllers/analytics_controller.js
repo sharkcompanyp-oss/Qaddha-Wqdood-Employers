@@ -137,8 +137,12 @@ export const Get_Analytics = async (req, res) => {
     // ==================== 6. ربحية كل مادة ====================
     const profitPerSubject = All_Exams.map((subject) => {
       const studentsCount = subject.available_to?.length || 0;
+      const freeSubscriptions = subject.number_of_free_subscriptions || 0;
       const price = subject.price || 0;
-      const totalProfit = studentsCount * price;
+
+      // ✅ الأرباح الحقيقية = (عدد الطلاب - عدد المجانيين) × السعر
+      const paidStudents = studentsCount - freeSubscriptions;
+      const totalProfit = paidStudents * price;
 
       return {
         subject_id: subject.ID,

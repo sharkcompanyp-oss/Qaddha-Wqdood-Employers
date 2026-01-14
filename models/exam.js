@@ -14,6 +14,8 @@ const SUBJECTS_SCHEMA = mongoose.Schema({
     required: false,
     default: "6934998caad4fa6ea1e59d31",
   },
+  number_of_free_subscriptions: { type: Number, required: false, default: 0 },
+  total_profit: { type: Number, required: false, default: 0 },
   questions: {
     type: [
       {
