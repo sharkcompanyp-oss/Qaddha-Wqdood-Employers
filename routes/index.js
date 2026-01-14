@@ -14,7 +14,7 @@ import { Get_Exams_By_Admin_Id } from "../controllers/get_exams_by_admin_id_cont
 import { Reject_Request } from "../controllers/reject_request_controller.js";
 import { Accept_Request } from "../controllers/accept_request_controller.js";
 import { Get_Analytics } from "../controllers/analytics_controller.js";
-import { Health } from "../controllers/Health_Controller.js";
+import { Health } from "../controllers/health_Controller.js";
 
 const router = express.Router();
 
