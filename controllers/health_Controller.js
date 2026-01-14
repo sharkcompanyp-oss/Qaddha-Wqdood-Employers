@@ -1,4 +1,4 @@
-import Student from "../models/student";
+import Student from "../models/student.js";
 export const Health = async (req, res) => {
   try {
     const All_Students_Without_Goal = await Student.findOne({ ID: "2330040" });
