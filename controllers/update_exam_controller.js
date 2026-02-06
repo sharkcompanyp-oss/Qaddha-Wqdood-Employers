@@ -34,12 +34,12 @@ export const Update_Exam = async (req, res) => {
 
     const clean_new_available_to = Array.isArray(new_available_to)
       ? new_available_to.filter(
-          (x) => x !== null && x !== undefined && x !== ""
+          (x) => x !== null && x !== undefined && x !== "",
         )
       : [];
 
     const clean_old_available_to = The_Exam.available_to.filter(
-      (x) => x !== null && x !== undefined && x !== ""
+      (x) => x !== null && x !== undefined && x !== "",
     );
 
     // حساب عدد الطلاب قبل وبعد
@@ -72,7 +72,7 @@ export const Update_Exam = async (req, res) => {
     The_Exam.visible = new_visible;
     The_Exam.available_to = clean_new_available_to;
     The_Exam.open_mode = new_open_mode;
-    The_Exam.price = new_price;
+    The_Exam.price = Number(new_price) * Number(new_questions.length);
 
     await The_Exam.save();
 
