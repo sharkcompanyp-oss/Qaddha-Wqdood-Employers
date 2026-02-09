@@ -28,7 +28,9 @@ export const set_price_for_question = async (req, res) => {
         filter: { _id: exam._id },
         update: {
           $set: {
-            price: Number(new_price) * Number(exam.questions.length),
+            price: Math.round(
+              Number(new_price) * Number(exam.questions.length),
+            ),
           },
         },
       },
