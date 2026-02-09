@@ -1,7 +1,4 @@
 import Admins from "../models/admin.js"; // تأكد من الاسم الصحيح
-
-dotenv.config();
-
 /**
  * @param {import('express').Request} req
  * @param {import('express').Response} res
