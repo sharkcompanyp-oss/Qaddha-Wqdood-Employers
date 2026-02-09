@@ -4,6 +4,7 @@ const ADMIN_SCHEMA = mongoose.Schema({
   phone_number: { type: String, required: true },
   password: { type: String, required: true },
   total_profit: { type: Number, required: false, default: 0 },
+  price_for_question: { type: Number, required: false, default: 0.7 },
 });
 
 export default mongoose.model("admin", ADMIN_SCHEMA);

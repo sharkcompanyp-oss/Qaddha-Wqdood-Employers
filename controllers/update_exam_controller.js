@@ -72,9 +72,7 @@ export const Update_Exam = async (req, res) => {
     The_Exam.visible = new_visible;
     The_Exam.available_to = clean_new_available_to;
     The_Exam.open_mode = new_open_mode;
-    The_Exam.price = Math.round(
-      Number(new_price) * Number(new_questions.length),
-    );
+    The_Exam.price = new_price;
 
     await The_Exam.save();
 
