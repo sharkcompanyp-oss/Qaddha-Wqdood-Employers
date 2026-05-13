@@ -1,5 +1,5 @@
 import Request from "../models/request.js";
-import Exams from "../models/exam.js";
+import Subjects from "../models/exam.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -17,7 +17,7 @@ export const Accept_Request = async (req, res) => {
     }
 
     // أضف student_ID لمصفوفة available_to في كل اختبار
-    await Exams.updateMany(
+    await Subjects.updateMany(
       { _id: { $in: The_Request.exams_ids } },
       { $addToSet: { available_to: The_Request.student_ID } },
     );
