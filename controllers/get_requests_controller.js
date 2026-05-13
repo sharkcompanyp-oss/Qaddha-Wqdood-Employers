@@ -1,5 +1,5 @@
 import request from "../models/request.js";
-import Subjects from "../models/subjects.js";
+import Exams from "../models/exam.js";
 
 export const Get_Requests = async (req, res) => {
   try {
@@ -11,7 +11,7 @@ export const Get_Requests = async (req, res) => {
 
     const enriched = await Promise.all(
       Requests.map(async (req_item) => {
-        const exams = await Subjects.find(
+        const exams = await Exams.find(
           { _id: { $in: req_item.exams_ids } },
           { name: 1, price: 1 },
         );
