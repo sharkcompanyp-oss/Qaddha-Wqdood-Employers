@@ -4,7 +4,7 @@ dotenv.config();
 
 export const Reject_Request = async (req, res) => {
   try {
-    const { _id, PASSWORD } = req.body;
+    const { _id, PASSWORD, our_notes } = req.body;
 
     // التحقق من كلمة المرور
     if (!PASSWORD || PASSWORD !== process.env.PASSWORD) {
@@ -20,11 +20,12 @@ export const Reject_Request = async (req, res) => {
     const The_Request = await Request.findById(_id);
 
     if (!The_Request) {
-      return res.status(404).json({ message: "الطلب محذوف بالفعل" });
+      return res.status(404).json({ message: "الطلب محذوف" });
     }
+    The_Request.our_notes = our_notes || "";
+    The_Request.status = "rejected";
 
-    // الحذف
-    await The_Request.deleteOne();
+    await The_Request.save();
 
     return res.status(200).json({ message: "تم الرفض بنجاح" });
   } catch (err) {
