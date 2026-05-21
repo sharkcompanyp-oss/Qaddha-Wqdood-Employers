@@ -9,6 +9,8 @@ dotenv.config();
  * @param {import('express').Response} res
  */
 export const Update_Exam = async (req, res) => {
+  console.log("=== Update_Exam called ===");
+  console.log("body keys:", Object.keys(req.body));
   try {
     const {
       _id,
