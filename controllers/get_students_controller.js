@@ -22,6 +22,7 @@ export const Get_Students = async (req, res) => {
 
     res.json(students);
   } catch (error) {
+    console.error("Get Students Error : ", error);
     res.status(500).json({ message: "تأكد من اتصالك بالانترنت" });
   }
 };
