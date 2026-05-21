@@ -23,13 +23,16 @@ export const Get_Students = async (req, res) => {
     let students;
 
     if (searchTerm) {
-      console.log("🔍 Searching for:", searchTerm);
       const regex = new RegExp(searchTerm, "i");
+      const isNumber = !isNaN(searchTerm);
+
       students = await Students.find({
-        $or: [{ name: regex }, { ID: searchTerm }],
+        $or: [
+          { name: regex },
+          ...(isNumber ? [{ ID: Number(searchTerm) }] : []), // ← بس إذا رقم
+        ],
       });
     } else {
-      console.log("📋 Fetching all students");
       students = await Students.find();
     }
 
