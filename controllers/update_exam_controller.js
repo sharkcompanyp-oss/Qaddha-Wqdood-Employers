@@ -20,6 +20,7 @@ export const Update_Exam = async (req, res) => {
       new_available_to,
       new_open_mode,
       new_price,
+      new_summary,
     } = req.body;
 
     if (!_id) {
@@ -73,6 +74,7 @@ export const Update_Exam = async (req, res) => {
     The_Exam.available_to = clean_new_available_to;
     The_Exam.open_mode = new_open_mode;
     The_Exam.price = new_price;
+    new_summary ? (The_Exam.summary = new_summary) : (The_Exam.summary = null);
 
     await The_Exam.save();
 

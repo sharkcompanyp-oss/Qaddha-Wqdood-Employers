@@ -7,7 +7,6 @@ const STUDENT_SCHEMA = mongoose.Schema({
   nick_name: { type: String, default: "John Doe" },
   points: { type: Number, default: 0 },
   badge: { type: String, default: "فارش" },
-  time: { type: Number, required: false, default: 0 },
   scores: {
     type: [
       {

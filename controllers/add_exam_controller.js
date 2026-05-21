@@ -15,6 +15,7 @@ export const Add_Exam = async (req, res) => {
       visible,
       price,
       admin_id,
+      summary,
     } = req.body;
 
     // التحقق من الحقول المطلوبة
@@ -54,6 +55,7 @@ export const Add_Exam = async (req, res) => {
       open_mode: true,
       price: price || 0,
       admin_id: admin_id || null,
+      summary: summary || null,
     });
 
     await The_New_Exam.save();

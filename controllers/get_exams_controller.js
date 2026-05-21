@@ -19,7 +19,6 @@ export const Get_Exams = async (req, res) => {
       exams = await Exams.find({
         $or: [{ name: regex }, { ID: searchTerm }],
       });
-      console.log(exams);
     } else {
       exams = await Exams.find();
     }

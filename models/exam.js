@@ -1,4 +1,85 @@
 import mongoose from "mongoose";
+
+// ─── Lecture Summary Sub-Schemas ───────────────────────────────────────────────
+
+const ContentItemSchema = new mongoose.Schema(
+  {
+    text: { type: String },
+    keywords: [{ type: String }],
+    is_example: { type: Boolean },
+    strong: { type: String },
+    emoji: { type: String },
+    title: { type: String },
+    description: { type: String },
+    type: { type: String },
+    items: [
+      {
+        text: { type: String },
+        keywords: [{ type: String }],
+        is_example: { type: Boolean },
+        strong: { type: String },
+        emoji: { type: String },
+        title: { type: String },
+        description: { type: String },
+        type: { type: String },
+        items: [
+          {
+            text: { type: String },
+            keywords: [{ type: String }],
+          },
+        ],
+      },
+    ],
+  },
+  { _id: false },
+);
+
+const ContentBlockSchema = new mongoose.Schema(
+  {
+    type: { type: String, required: true },
+    emoji: { type: String },
+    text: { type: String },
+    label: { type: String },
+    title: { type: String },
+    badge: { type: String },
+    style: { type: String },
+    items: [ContentItemSchema],
+  },
+  { _id: false },
+);
+
+const NoteSchema = new mongoose.Schema(
+  {
+    student_ID: { type: String, required: true },
+    student_nick_name: { type: String, required: true },
+    note: { type: String, required: true },
+  },
+  { _id: false },
+);
+
+const SectionSchema = new mongoose.Schema(
+  {
+    id: { type: String, required: true },
+    number: { type: Number, required: true },
+    title: { type: String, required: true },
+    content_blocks: [ContentBlockSchema],
+    notes: [NoteSchema],
+  },
+  { _id: false },
+);
+
+const SummarySchema = new mongoose.Schema(
+  {
+    meta: {
+      lecture_title: { type: String, required: true },
+    },
+    sections: [SectionSchema],
+  },
+  { _id: false },
+);
+
+// ─── Main Schema ───────────────────────────────────────────────────────────────
+
 const SUBJECTS_SCHEMA = mongoose.Schema({
   name: { type: String, required: true },
   ID: { type: String, required: false },
@@ -26,6 +107,7 @@ const SUBJECTS_SCHEMA = mongoose.Schema({
       },
     ],
   },
+  summary: { type: [SummarySchema], required: false, default: null },
 });
 
 export default mongoose.model("Subjects", SUBJECTS_SCHEMA);
