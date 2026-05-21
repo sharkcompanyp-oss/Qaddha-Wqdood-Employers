@@ -7,7 +7,7 @@ export const Get_Students = async (req, res) => {
     const { searchTerm, PASSWORD } = req.body;
 
     if (!PASSWORD || PASSWORD !== process.env.PASSWORD) {
-      return res.status(401).json({ message: "تعذر جلب الطالب" });
+      res.status(401).json({ message: "تعذر جلب الطالب" });
     }
 
     let students;
