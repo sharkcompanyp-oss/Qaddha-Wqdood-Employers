@@ -36,7 +36,7 @@ const ContentItemSchema = new mongoose.Schema(
 
 const ContentBlockSchema = new mongoose.Schema(
   {
-    type: { type: String, required: true },
+    type: { type: String, required: false },
     emoji: { type: String },
     text: { type: String },
     label: { type: String },
@@ -50,18 +50,18 @@ const ContentBlockSchema = new mongoose.Schema(
 
 const NoteSchema = new mongoose.Schema(
   {
-    student_ID: { type: String, required: true },
-    student_nick_name: { type: String, required: true },
-    note: { type: String, required: true },
+    student_ID: { type: String, required: false, default: "" },
+    student_nick_name: { type: String, required: false, default: "" },
+    note: { type: String, required: false, default: "" },
   },
   { _id: false },
 );
 
 const SectionSchema = new mongoose.Schema(
   {
-    id: { type: String, required: true },
-    number: { type: Number, required: true },
-    title: { type: String, required: true },
+    id: { type: String, required: false, default: "" },
+    number: { type: Number, required: false, default: 0 },
+    title: { type: String, required: false, default: "" }, // ← شيل required
     content_blocks: [ContentBlockSchema],
     notes: [NoteSchema],
   },
@@ -71,7 +71,7 @@ const SectionSchema = new mongoose.Schema(
 const SummarySchema = new mongoose.Schema(
   {
     meta: {
-      lecture_title: { type: String, required: true },
+      lecture_title: { type: String, required: false, default: "" }, // ← شيل required
     },
     sections: [SectionSchema],
   },
