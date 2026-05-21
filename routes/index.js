@@ -19,7 +19,7 @@ import { set_price_for_question } from "../controllers/price_for_question_contro
 
 const router = express.Router();
 
-router.get("/students", Get_Students);
+router.post("/students", Get_Students);
 router.post("/exams", Get_Exams);
 router.post("/addexam", Add_Exam);
 router.delete("/deletestudent", Delete_Student);
