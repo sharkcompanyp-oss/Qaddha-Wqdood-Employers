@@ -1,3 +1,7 @@
+import Students from "../models/student.js";
+import dotenv from "dotenv";
+dotenv.config();
+
 export const Get_Students = async (req, res) => {
   const { searchTerm, PASSWORD } = req.body;
   try {
