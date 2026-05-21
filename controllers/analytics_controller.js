@@ -24,6 +24,7 @@ export const Get_Analytics = async (req, res) => {
       return {
         subject_id: subject.ID,
         subject_name: subject.name,
+        college_id: subject.college_id, // ✅ أضفناها هنا
         price: price,
         enrolled_students: studentsCount,
         total_profit: totalProfit,
