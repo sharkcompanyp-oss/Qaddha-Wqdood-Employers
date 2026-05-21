@@ -28,7 +28,7 @@ router.put("/updatestudent", Update_Student);
 router.put("/updateexam", Update_Exam);
 router.post("/getonesubject", Get_One_Subject);
 router.post("/addstudenttoexam", Add_Student_To_Exam);
-router.get("/getrequests", Get_Requests);
+router.post("/getrequests", Get_Requests);
 router.delete("/rejectrequest", Reject_Request);
 router.post("/acceptrequest", Accept_Request);
 router.get("/analytics", Get_Analytics);

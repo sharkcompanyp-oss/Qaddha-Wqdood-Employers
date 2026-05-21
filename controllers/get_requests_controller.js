@@ -3,10 +3,15 @@ import Subjects from "../models/exam.js";
 
 export const Get_Requests = async (req, res) => {
   try {
-    const Requests = await request.find();
+    const { status } = req.body;
+
+    // فلترة حسب الحالة إذا موجودة
+    const query = status ? { status } : {};
+
+    const Requests = await request.find(query);
 
     if (!Requests || Requests.length === 0) {
-      return res.status(404).json({ message: "لا توجد طلبات معلقة حالياً" });
+      return res.status(404).json({ message: "لا توجد طلبات" });
     }
 
     const enriched = await Promise.all(
