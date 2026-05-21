@@ -74,7 +74,7 @@ export const Update_Exam = async (req, res) => {
     The_Exam.available_to = clean_new_available_to;
     The_Exam.open_mode = new_open_mode;
     The_Exam.price = new_price;
-    new_summary ? (The_Exam.summary = new_summary) : (The_Exam.summary = null);
+    The_Exam.summary = Array.isArray(new_summary) ? new_summary : [];
 
     await The_Exam.save();
 
