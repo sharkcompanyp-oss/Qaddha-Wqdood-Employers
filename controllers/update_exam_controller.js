@@ -74,7 +74,14 @@ export const Update_Exam = async (req, res) => {
     The_Exam.available_to = clean_new_available_to;
     The_Exam.open_mode = new_open_mode;
     The_Exam.price = new_price;
+    // قبل The_Exam.save()
+    console.log("new_summary received:", JSON.stringify(new_summary, null, 2));
+    console.log("summary length:", new_summary?.length);
     The_Exam.summary = Array.isArray(new_summary) ? new_summary : [];
+    console.log(
+      "exam summary before save:",
+      JSON.stringify(The_Exam.summary, null, 2),
+    );
 
     await The_Exam.save();
 
