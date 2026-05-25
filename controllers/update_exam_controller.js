@@ -79,11 +79,9 @@ export const Update_Exam = async (req, res) => {
     // قبل The_Exam.save()
     console.log("new_summary received:", JSON.stringify(new_summary, null, 2));
     console.log("summary length:", new_summary?.length);
-    The_Exam.summary = Array.isArray(new_summary) ? new_summary : [];
-    console.log(
-      "exam summary before save:",
-      JSON.stringify(The_Exam.summary, null, 2),
-    );
+    if (Array.isArray(new_summary) && new_summary.length > 0) {
+      The_Exam.summary = new_summary;
+    }
 
     await The_Exam.save();
 
