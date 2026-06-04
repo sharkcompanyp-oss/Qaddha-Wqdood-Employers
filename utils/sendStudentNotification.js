@@ -1,8 +1,13 @@
 import admin from "firebase-admin";
 import { readFileSync } from "fs";
+import dotenv from "dotenv";
+dotenv.config();
 
 // نفس الـ serviceAccount اللي عندك
-const serviceAccount = JSON.parse(readFileSync("./serviceAccount.json"));
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+
+// هذا السطر يصلح مشكلة الـ newlines على بعض السيرفرات
+serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, "\n");
 
 if (!admin.apps.length) {
   admin.initializeApp({
