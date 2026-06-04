@@ -1,6 +1,5 @@
 import Request from "../models/request.js";
 import dotenv from "dotenv";
-import { sendStudentNotification } from "../utils/sendStudentNotification.js";
 dotenv.config();
 
 export const Reject_Request = async (req, res) => {
@@ -25,10 +24,14 @@ export const Reject_Request = async (req, res) => {
     await The_Request.save();
 
     // إرسال إشعار للطالب
-    await sendStudentNotification({
-      student_ID: The_Request.student_ID,
-      title: "❌ تم رفض طلبك",
-      body: "للأسف تم رفض طلب التسجيل, اذهب إلى الإحصائيات لرؤية سبب الرفض",
+    await fetch("https://exams-back.onrender.com/notify-student", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        student_ID: The_Request.student_ID,
+        title: "❌ تم رفض طلبك",
+        body: "للأسف تم رفض طلب التسجيل, اذهب إلى الإحصائيات لرؤية سبب الرفض",
+      }),
     });
 
     return res.status(200).json({ message: "تم الرفض بنجاح" });

@@ -1,7 +1,6 @@
 import Request from "../models/request.js";
 import Subjects from "../models/exam.js";
 import dotenv from "dotenv";
-import { sendStudentNotification } from "../utils/sendStudentNotification.js";
 dotenv.config();
 
 export const Accept_Request = async (req, res) => {
@@ -27,10 +26,14 @@ export const Accept_Request = async (req, res) => {
     await The_Request.save();
 
     // إرسال إشعار للطالب
-    await sendStudentNotification({
-      student_ID: The_Request.student_ID,
-      title: "✅ تم قبول طلبك",
-      body: "أهلا وسهلا بك, يمكنك الآن الدخول لموادك",
+    await fetch("https://exams-back.onrender.com/notify-student", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        student_ID: The_Request.student_ID,
+        title: "✅ تم قبول طلبك",
+        body: "أهلا وسهلا بك, يمكنك الآن الدخول لموادك",
+      }),
     });
 
     return res
