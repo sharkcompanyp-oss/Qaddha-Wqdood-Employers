@@ -1,31 +1,35 @@
 import Request from "../models/request.js";
 import dotenv from "dotenv";
+import { sendStudentNotification } from "../utils/sendStudentNotification.js";
 dotenv.config();
 
 export const Reject_Request = async (req, res) => {
   try {
     const { _id, PASSWORD, our_notes } = req.body;
 
-    // التحقق من كلمة المرور
     if (!PASSWORD || PASSWORD !== process.env.PASSWORD) {
       return res.status(401).json({ message: "تعذر رفض الطلب" });
     }
 
-    // التحقق من وجود _id
     if (!_id) {
       return res.status(400).json({ message: "الرجاء إرسال _id" });
     }
 
-    // البحث عن الطلب
     const The_Request = await Request.findById(_id);
-
     if (!The_Request) {
       return res.status(404).json({ message: "الطلب محذوف" });
     }
+
     The_Request.our_notes = our_notes || "";
     The_Request.status = "rejected";
-
     await The_Request.save();
+
+    // إرسال إشعار للطالب
+    await sendStudentNotification({
+      student_ID: The_Request.student_ID,
+      title: "❌ تم رفض طلبك",
+      body: "للأسف تم رفض طلب التسجيل, اذهب إلى الإحصائيات لرؤية سبب الرفض",
+    });
 
     return res.status(200).json({ message: "تم الرفض بنجاح" });
   } catch (err) {

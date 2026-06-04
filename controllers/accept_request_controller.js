@@ -1,6 +1,7 @@
 import Request from "../models/request.js";
 import Subjects from "../models/exam.js";
 import dotenv from "dotenv";
+import { sendStudentNotification } from "../utils/sendStudentNotification.js";
 dotenv.config();
 
 export const Accept_Request = async (req, res) => {
@@ -16,16 +17,21 @@ export const Accept_Request = async (req, res) => {
       return res.status(404).json({ message: "الطلب غير موجود" });
     }
 
-    // أضف student_ID لمصفوفة available_to في كل اختبار
     await Subjects.updateMany(
       { _id: { $in: The_Request.exams_ids } },
       { $addToSet: { available_to: The_Request.student_ID } },
     );
 
-    // حدّث حالة الطلب
     The_Request.status = "accepted";
     The_Request.our_notes = our_notes || "";
     await The_Request.save();
+
+    // إرسال إشعار للطالب
+    await sendStudentNotification({
+      student_ID: The_Request.student_ID,
+      title: "✅ تم قبول طلبك",
+      body: "أهلا وسهلا بك, يمكنك الآن الدخول لموادك",
+    });
 
     return res
       .status(200)
