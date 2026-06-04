@@ -31,8 +31,10 @@ export const Accept_Request = async (req, res) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         student_ID: The_Request.student_ID,
-        title: "✅ تم قبول طلبك",
-        body: "أهلا وسهلا بك, يمكنك الآن الدخول لموادك",
+        title: "✅ تم القبول بنجاح",
+        body: our_notes
+          ? ` ${our_notes}`
+          : "أهلا وسهلا بك, يمكنك الآن الدخول لموادك",
       }),
     });
 

@@ -29,8 +29,10 @@ export const Reject_Request = async (req, res) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         student_ID: The_Request.student_ID,
-        title: "❌ تم رفض طلبك",
-        body: "للأسف تم رفض طلب التسجيل, اذهب إلى الإحصائيات لرؤية سبب الرفض",
+        title: "❌ تم رفض الطلب",
+        body: our_notes
+          ? `سبب الرفض : ${our_notes}`
+          : "للأسف تم رفض طلب التسجيل",
       }),
     });
 
