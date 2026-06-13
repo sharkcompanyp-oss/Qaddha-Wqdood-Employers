@@ -1,0 +1,11 @@
+import mongoose from "mongoose";
+const COMPLAINT_SCHEMA = mongoose.Schema({
+  student_ID: { type: String, required: true },
+  type: { type: String, required: true },
+  subject_name: { type: String, required: false },
+  college_name: { type: String, required: false },
+  university_name: { type: String, required: false },
+  complaint: { type: String, required: false },
+});
+
+export default mongoose.model("complaint", COMPLAINT_SCHEMA);

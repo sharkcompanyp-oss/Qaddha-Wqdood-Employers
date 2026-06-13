@@ -15,6 +15,8 @@ import { Accept_Request } from "../controllers/accept_request_controller.js";
 import { Get_Analytics } from "../controllers/analytics_controller.js";
 import { Health } from "../controllers/health_Controller.js";
 import { set_price_for_question } from "../controllers/price_for_question_controller.js";
+import { Get_Complaints } from "../controllers/get_complaints_controller.js";
+import { Responde_To_Complaint } from "../controllers/responde_to_complaint_controller.js";
 
 const router = express.Router();
 
@@ -33,6 +35,8 @@ router.delete("/rejectrequest", Reject_Request);
 router.post("/acceptrequest", Accept_Request);
 router.get("/analytics", Get_Analytics);
 router.post("/priceforquestion", set_price_for_question);
+router.get("/complaints", Get_Complaints);
+router.post("/responde-to-complaint", Responde_To_Complaint);
 
 router.get("/health", Health);
 
