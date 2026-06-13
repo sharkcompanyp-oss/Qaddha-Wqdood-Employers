@@ -1,5 +1,9 @@
 import Students from "../models/student.js";
 import complaint from "../models/complaint.js";
+import dotenv from "dotenv";
+
+dotenv.config();
+
 /**
  * @param {import('express').Request} req
  * @param {import('express').Response} res
@@ -34,6 +38,7 @@ export const Responde_To_Complaint = async (req, res) => {
         student_ID: student_ID,
         title: "تمت الإستجابة للشكوى",
         body: our_notes ? ` ${our_notes}` : "شكرا لتنبيهنا",
+        PASSWORD: process.env.INTERNAL_SECRET, // ✅ من .env مو hardcoded
       }),
     });
 
