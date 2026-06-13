@@ -15,6 +15,12 @@ export const Responde_To_Complaint = async (req, res) => {
     const The_Complaint = await complaint.findById(complaint_id);
     const The_Student = await Students.findOne({ ID: student_ID });
 
+    // بعد الجلب لازم تتحقق
+    if (!The_Complaint)
+      return res.status(404).json({ message: "الشكوى غير موجودة" });
+    if (!The_Student)
+      return res.status(404).json({ message: "الطالب غير موجود" });
+
     if (points_to_add) {
       The_Student.points += Number(points_to_add);
       await The_Student.save();
