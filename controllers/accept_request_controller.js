@@ -35,6 +35,7 @@ export const Accept_Request = async (req, res) => {
         body: our_notes
           ? ` ${our_notes}`
           : "أهلا وسهلا بك, يمكنك الآن الدخول لموادك",
+        INTERNAL_SECRET: process.env.INTERNAL_SECRET,
       }),
     });
 

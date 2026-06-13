@@ -33,6 +33,7 @@ export const Reject_Request = async (req, res) => {
         body: our_notes
           ? `سبب الرفض : ${our_notes}`
           : "للأسف تم رفض طلب التسجيل",
+        INTERNAL_SECRET: process.env.INTERNAL_SECRET,
       }),
     });
 
