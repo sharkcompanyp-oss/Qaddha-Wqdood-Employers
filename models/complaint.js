@@ -7,6 +7,9 @@ const COMPLAINT_SCHEMA = mongoose.Schema({
   subject_name: { type: String, required: false },
   college_name: { type: String, required: false },
   university_name: { type: String, required: false },
+  question: { type: String, required: false },
+  student_name: { type: String, required: false },
+  whatsapp_number: { type: String, required: false },
   complaint: { type: String, required: false },
 });
 
