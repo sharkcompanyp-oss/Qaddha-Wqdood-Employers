@@ -1,5 +1,6 @@
 import Exams from "../models/exam.js";
 import Admins from "../models/admin.js"; // تأكد من الاسم الصحيح
+import Employers from "../models/employer.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -23,6 +24,10 @@ export const Update_Exam = async (req, res) => {
       new_open_mode,
       new_price,
       new_summary,
+      // ─── حقول مسار الموظف ───
+      employee, // true إذا كان الحفظ صادراً من تطبيق الموظف
+      employer_id, // _id الموظف
+      elapsed_seconds, // الوقت المنقضي من بدء التعديل إلى الحفظ
     } = req.body;
 
     if (!_id) {
@@ -33,6 +38,36 @@ export const Update_Exam = async (req, res) => {
     });
     if (!The_Exam) {
       return res.status(404).json({ message: "الاختبار غير موجود" });
+    }
+
+    // ─── مسار الموظف: تعديل الأسئلة فقط مع تسجيل الجلسة ──────────────────────────
+    if (employee === true) {
+      // تحقّق من أن هذه المادة مخصّصة لهذا الموظف
+      if (
+        !employer_id ||
+        !The_Exam.employer ||
+        String(The_Exam.employer) !== String(employer_id)
+      ) {
+        return res.status(403).json({ message: "تعذر التعديل" });
+      }
+
+      // أبقِ كل معلومات المادة كما هي، وغيّر الأسئلة فقط
+      The_Exam.questions = new_questions;
+      await The_Exam.save();
+
+      // أضف معلومات الجلسة لسجل الموظف
+      const employer = await Employers.findById(employer_id);
+      if (employer) {
+        employer.sessions.push({
+          subject_id: String(The_Exam._id),
+          subject_name: The_Exam.name,
+          edited_at: new Date(),
+          elapsed_seconds: Number(elapsed_seconds) || 0,
+        });
+        await employer.save();
+      }
+
+      return res.status(200).json({ message: "تم حفظ تعديلات الأسئلة" });
     }
 
     const clean_new_available_to = Array.isArray(new_available_to)

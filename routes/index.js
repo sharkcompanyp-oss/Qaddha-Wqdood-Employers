@@ -17,6 +17,15 @@ import { Health } from "../controllers/health_Controller.js";
 import { set_price_for_question } from "../controllers/price_for_question_controller.js";
 import { Get_Complaints } from "../controllers/get_complaints_controller.js";
 import { Responde_To_Complaint } from "../controllers/responde_to_complaint_controller.js";
+import { Employer_Login } from "../controllers/employer_login_controller.js";
+import { Get_Employer_Subjects } from "../controllers/get_employer_subjects_controller.js";
+import {
+  Get_Employers,
+  Add_Employer,
+  Update_Employer,
+  Delete_Employer,
+} from "../controllers/employers_crud_controller.js";
+import { Assign_Subject_To_Employer } from "../controllers/assign_subject_controller.js";
 
 const router = express.Router();
 
@@ -37,6 +46,15 @@ router.get("/analytics", Get_Analytics);
 router.post("/priceforquestion", set_price_for_question);
 router.get("/complaints", Get_Complaints);
 router.post("/responde-to-complaint", Responde_To_Complaint);
+
+// ─── الموظفون ──────────────────────────────────────────────────────────────────
+router.post("/employerlogin", Employer_Login);
+router.post("/employersubjects", Get_Employer_Subjects);
+router.post("/employers", Get_Employers);
+router.post("/addemployer", Add_Employer);
+router.put("/updateemployer", Update_Employer);
+router.delete("/deleteemployer", Delete_Employer);
+router.post("/assignsubject", Assign_Subject_To_Employer);
 
 router.get("/health", Health);
 
