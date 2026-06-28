@@ -12,7 +12,7 @@ export const Get_Exams = async (req, res) => {
   try {
     let exams;
     if (!PASSWORD || PASSWORD !== process.env.PASSWORD) {
-      res.status(401).json({ message: "تعذر جلب الاختبار" });
+      res.status(401).json({ message: "تعذر جلب المادة" });
     }
     if (searchTerm) {
       const regex = new RegExp(searchTerm, "i"); // بحث غير حساس لحالة الأحرف

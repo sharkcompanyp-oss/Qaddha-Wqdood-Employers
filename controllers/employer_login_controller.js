@@ -1,8 +1,8 @@
 import Employers from "../models/employer.js";
 
 /**
- * تسجيل دخول الموظف عبر رقم الموبايل + الكلمات الثلاث.
- * عند النجاح يعيد _id الموظف وبياناته الأساسية.
+ * تسجيل دخول العضو عبر رقم الموبايل + الكلمات الثلاث.
+ * عند النجاح يعيد _id العضو وبياناته الأساسية.
  * @param {import('express').Request} req
  * @param {import('express').Response} res
  */

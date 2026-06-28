@@ -17,7 +17,7 @@ export const Add_Student_To_Exam = async (req, res) => {
     // جلب الامتحان
     const The_Exam = await Subjects.findOne({ _id: EXAM_ID });
     if (!The_Exam) {
-      return res.status(404).json({ message: "الاختبار غير موجود" });
+      return res.status(404).json({ message: "المادة غير موجود" });
     }
 
     // ✅ حالة خاصة: تصفية كل المشتركين
@@ -39,7 +39,7 @@ export const Add_Student_To_Exam = async (req, res) => {
     const studentExists = The_Exam.available_to.includes(String(STUDENT_ID));
     if (studentExists) {
       return res.status(400).json({
-        message: "الطالب مضاف بالفعل لهذا الاختبار",
+        message: "الطالب مضاف بالفعل لهذا المادة",
       });
     }
 
@@ -62,11 +62,11 @@ export const Add_Student_To_Exam = async (req, res) => {
           admin.total_profit += The_Exam.price;
           await admin.save();
           console.log(
-            `✅ تم إضافة ${The_Exam.price} ل.س لأرباح الأدمن ${admin.name}`
+            `✅ تم إضافة ${The_Exam.price} ل.س لأرباح الأدمن ${admin.name}`,
           );
         } else {
           console.warn(
-            `⚠️ لم يتم العثور على الأدمن بـ ID: ${The_Exam.admin_id}`
+            `⚠️ لم يتم العثور على الأدمن بـ ID: ${The_Exam.admin_id}`,
           );
         }
       }

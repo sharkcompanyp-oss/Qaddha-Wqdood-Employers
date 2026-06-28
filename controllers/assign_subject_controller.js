@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 /**
- * تسليم مادة لموظف: يضبط حقل employer للمادة على _id الموظف.
+ * تسليم مادة لعضو: يضبط حقل employer للمادة على _id العضو.
  * تمرير employer_id = null يلغي التسليم.
  * @param {import('express').Request} req
  * @param {import('express').Response} res
@@ -26,11 +26,11 @@ export const Assign_Subject_To_Employer = async (req, res) => {
       return res.status(404).json({ message: "المادة غير موجودة" });
     }
 
-    // إن لم يكن إلغاء تسليم، نتحقق من وجود الموظف
+    // إن لم يكن إلغاء تسليم، نتحقق من وجود العضو
     if (employer_id) {
       const employer = await Employers.findById(employer_id);
       if (!employer) {
-        return res.status(404).json({ message: "الموظف غير موجود" });
+        return res.status(404).json({ message: "العضو غير موجود" });
       }
     }
 
@@ -38,7 +38,7 @@ export const Assign_Subject_To_Employer = async (req, res) => {
     await exam.save();
 
     res.status(200).json({
-      message: employer_id ? "تم تسليم المادة للموظف" : "تم إلغاء التسليم",
+      message: employer_id ? "تم تسليم المادة للعضو" : "تم إلغاء التسليم",
       exam_id: String(exam._id),
       employer: exam.employer,
     });

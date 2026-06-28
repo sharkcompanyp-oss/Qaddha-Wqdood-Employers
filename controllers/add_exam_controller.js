@@ -42,7 +42,7 @@ export const Add_Exam = async (req, res) => {
     const Last_Exam = await Exams.findOne().sort({ ID: -1 }).lean();
     const New_ID = Last_Exam ? Number(Last_Exam.ID) + 1 : 1;
 
-    // إنشاء الاختبار الجديد
+    // إنشاء المادة الجديد
     const The_New_Exam = new Exams({
       name,
       ID: String(New_ID),
@@ -61,11 +61,11 @@ export const Add_Exam = async (req, res) => {
     await The_New_Exam.save();
 
     res.status(201).json({
-      message: "تمت إضافة الاختبار بنجاح",
+      message: "تمت إضافة المادة بنجاح",
       exam_id: String(New_ID),
     });
   } catch (error) {
-    console.error("خطأ في إضافة الاختبار:", error);
+    console.error("خطأ في إضافة المادة:", error);
 
     // معالجة أخطاء MongoDB المحددة
     if (error.name === "ValidationError") {
@@ -77,7 +77,7 @@ export const Add_Exam = async (req, res) => {
 
     if (error.code === 11000) {
       return res.status(409).json({
-        error: "الاختبار موجود مسبقاً",
+        error: "المادة موجود مسبقاً",
       });
     }
 

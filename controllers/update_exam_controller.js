@@ -24,9 +24,9 @@ export const Update_Exam = async (req, res) => {
       new_open_mode,
       new_price,
       new_summary,
-      // ─── حقول مسار الموظف ───
-      employee, // true إذا كان الحفظ صادراً من تطبيق الموظف
-      employer_id, // _id الموظف
+      // ─── حقول مسار العضو ───
+      employee, // true إذا كان الحفظ صادراً من تطبيق العضو
+      employer_id, // _id العضو
       elapsed_seconds, // الوقت المنقضي من بدء التعديل إلى الحفظ
     } = req.body;
 
@@ -37,12 +37,12 @@ export const Update_Exam = async (req, res) => {
       _id: _id,
     });
     if (!The_Exam) {
-      return res.status(404).json({ message: "الاختبار غير موجود" });
+      return res.status(404).json({ message: "المادة غير موجود" });
     }
 
-    // ─── مسار الموظف: تعديل الأسئلة فقط مع تسجيل الجلسة ──────────────────────────
+    // ─── مسار العضو: تعديل الأسئلة فقط مع تسجيل الجلسة ──────────────────────────
     if (employee === true) {
-      // تحقّق من أن هذه المادة مخصّصة لهذا الموظف
+      // تحقّق من أن هذه المادة مخصّصة لهذا العضو
       if (
         !employer_id ||
         !The_Exam.employer ||
@@ -55,7 +55,7 @@ export const Update_Exam = async (req, res) => {
       The_Exam.questions = new_questions;
       await The_Exam.save();
 
-      // أضف معلومات الجلسة لسجل الموظف
+      // أضف معلومات الجلسة لسجل العضو
       const employer = await Employers.findById(employer_id);
       if (employer) {
         employer.sessions.push({
@@ -102,7 +102,7 @@ export const Update_Exam = async (req, res) => {
     admin.total_profit += profit_to_add;
     await admin.save();
 
-    // تحديث بيانات الاختبار
+    // تحديث بيانات المادة
     The_Exam.name = new_name;
     The_Exam.info = new_info;
     The_Exam.questions = new_questions;
@@ -121,7 +121,7 @@ export const Update_Exam = async (req, res) => {
     await The_Exam.save();
 
     res.status(200).json({
-      message: "تم تحديث بيانات الاختبار",
+      message: "تم تحديث بيانات المادة",
       profit_added: profit_to_add,
       old_count,
       new_count,

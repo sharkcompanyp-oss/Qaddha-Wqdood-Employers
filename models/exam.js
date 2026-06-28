@@ -95,7 +95,7 @@ const SUBJECTS_SCHEMA = mongoose.Schema({
     required: false,
     default: "6934998caad4fa6ea1e59d31",
   },
-  // _id الموظف المُسلّمة له هذه المادة (إن وُجد)
+  // _id العضو المُسلّمة له هذه المادة (إن وُجد)
   employer: {
     type: String,
     required: false,

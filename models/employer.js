@@ -12,7 +12,7 @@ const EditSessionSchema = new mongoose.Schema(
   { _id: false },
 );
 
-// ─── سكيما الموظف ───────────────────────────────────────────────────────────────
+// ─── سكيما العضو ───────────────────────────────────────────────────────────────
 // ملاحظة: كلمات المرور تُخزَّن كنص صريح عمداً (غير مشفّرة) ليتمكّن المدير من
 // تغييرها في حالات الطوارئ من لوحة التحكم الأساسية.
 const EMPLOYER_SCHEMA = new mongoose.Schema({
@@ -21,7 +21,7 @@ const EMPLOYER_SCHEMA = new mongoose.Schema({
   password1: { type: String, required: true },
   password2: { type: String, required: true },
   password3: { type: String, required: true },
-  // سجل كل جلسات التعديل التي قام بها الموظف
+  // سجل كل جلسات التعديل التي قام بها العضو
   sessions: { type: [EditSessionSchema], required: false, default: [] },
   created_at: { type: Date, required: false, default: Date.now },
 });

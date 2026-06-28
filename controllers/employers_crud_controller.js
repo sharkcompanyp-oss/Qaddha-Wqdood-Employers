@@ -9,19 +9,19 @@ const check_admin_password = (PASSWORD) =>
   PASSWORD && PASSWORD === process.env.PASSWORD;
 
 /**
- * جلب كل الموظفين مع تقرير مفصّل: المواد المستلمة، الوقت المنقضي لكل مادة،
+ * جلب كل الأعضاء مع تقرير مفصّل: المواد المستلمة، الوقت المنقضي لكل مادة،
  * والوقت الإجمالي. يُعرض كل شيء (بما فيه الكلمات الثلاث) للمدير.
  */
 export const Get_Employers = async (req, res) => {
   try {
     const { PASSWORD } = req.body;
     if (!check_admin_password(PASSWORD)) {
-      return res.status(401).json({ message: "تعذر جلب الموظفين" });
+      return res.status(401).json({ message: "تعذر جلب الأعضاء" });
     }
 
     const employers = await Employers.find().lean();
 
-    // أسماء المواد المخصّصة حالياً لكل موظف
+    // أسماء المواد المخصّصة حالياً لكل عضو
     const assigned = await Exams.find(
       { employer: { $ne: null } },
       { name: 1, ID: 1, employer: 1 },
@@ -55,14 +55,14 @@ export const Get_Employers = async (req, res) => {
 };
 
 /**
- * إضافة موظف جديد (المدير فقط).
+ * إضافة عضو جديد (المدير فقط).
  */
 export const Add_Employer = async (req, res) => {
   try {
     const { PASSWORD, name, phone_number, password1, password2, password3 } =
       req.body;
     if (!check_admin_password(PASSWORD)) {
-      return res.status(401).json({ message: "تعذر إضافة الموظف" });
+      return res.status(401).json({ message: "تعذر إضافة العضو" });
     }
     if (!name || !phone_number || !password1 || !password2 || !password3) {
       return res.status(400).json({
@@ -74,7 +74,7 @@ export const Add_Employer = async (req, res) => {
     if (exists) {
       return res
         .status(409)
-        .json({ message: "يوجد موظف مسجّل بهذا الرقم مسبقاً" });
+        .json({ message: "يوجد عضو مسجّل بهذا الرقم مسبقاً" });
     }
 
     const new_employer = new Employers({
@@ -88,7 +88,7 @@ export const Add_Employer = async (req, res) => {
 
     res
       .status(201)
-      .json({ message: "تمت إضافة الموظف بنجاح", employer: new_employer });
+      .json({ message: "تمت إضافة العضو بنجاح", employer: new_employer });
   } catch (error) {
     console.error("خطأ في Add_Employer:", error.message);
     res.status(500).json({ message: "تأكد من اتصالك بالانترنت" });
@@ -96,7 +96,7 @@ export const Add_Employer = async (req, res) => {
 };
 
 /**
- * تحديث بيانات موظف (المدير فقط) — بما فيها الكلمات الثلاث في حالات الطوارئ.
+ * تحديث بيانات عضو (المدير فقط) — بما فيها الكلمات الثلاث في حالات الطوارئ.
  */
 export const Update_Employer = async (req, res) => {
   try {
@@ -110,15 +110,15 @@ export const Update_Employer = async (req, res) => {
       password3,
     } = req.body;
     if (!check_admin_password(PASSWORD)) {
-      return res.status(401).json({ message: "تعذر تعديل الموظف" });
+      return res.status(401).json({ message: "تعذر تعديل العضو" });
     }
     if (!_id) {
-      return res.status(400).json({ message: "معرّف الموظف ناقص" });
+      return res.status(400).json({ message: "معرّف العضو ناقص" });
     }
 
     const employer = await Employers.findById(_id);
     if (!employer) {
-      return res.status(404).json({ message: "الموظف غير موجود" });
+      return res.status(404).json({ message: "العضو غير موجود" });
     }
 
     if (name !== undefined) employer.name = name;
@@ -129,7 +129,7 @@ export const Update_Employer = async (req, res) => {
 
     await employer.save();
 
-    res.status(200).json({ message: "تم تعديل بيانات الموظف", employer });
+    res.status(200).json({ message: "تم تعديل بيانات العضو", employer });
   } catch (error) {
     console.error("خطأ في Update_Employer:", error.message);
     res.status(500).json({ message: "تأكد من اتصالك بالانترنت" });
@@ -137,21 +137,21 @@ export const Update_Employer = async (req, res) => {
 };
 
 /**
- * حذف موظف (المدير فقط). تُفكّ تخصيصات المواد المرتبطة به.
+ * حذف عضو (المدير فقط). تُفكّ تخصيصات المواد المرتبطة به.
  */
 export const Delete_Employer = async (req, res) => {
   try {
     const { PASSWORD, _id } = req.body;
     if (!check_admin_password(PASSWORD)) {
-      return res.status(401).json({ message: "تعذر حذف الموظف" });
+      return res.status(401).json({ message: "تعذر حذف العضو" });
     }
     if (!_id) {
-      return res.status(400).json({ message: "معرّف الموظف ناقص" });
+      return res.status(400).json({ message: "معرّف العضو ناقص" });
     }
 
     const employer = await Employers.findByIdAndDelete(_id);
     if (!employer) {
-      return res.status(404).json({ message: "الموظف غير موجود" });
+      return res.status(404).json({ message: "العضو غير موجود" });
     }
 
     // فكّ تخصيص المواد التي كانت مسلّمة له
@@ -160,7 +160,7 @@ export const Delete_Employer = async (req, res) => {
       { $set: { employer: null } },
     );
 
-    res.status(200).json({ message: "تم حذف الموظف" });
+    res.status(200).json({ message: "تم حذف العضو" });
   } catch (error) {
     console.error("خطأ في Delete_Employer:", error.message);
     res.status(500).json({ message: "تأكد من اتصالك بالانترنت" });
