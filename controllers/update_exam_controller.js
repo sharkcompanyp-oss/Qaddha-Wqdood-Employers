@@ -6,6 +6,32 @@ import dotenv from "dotenv";
 dotenv.config();
 
 /**
+ * حماية تصنيفات الذكاء الاصطناعي المخزّنة:
+ * التطبيقات الحالية بتستبدل مصفوفة الأسئلة كاملة وما بتعرف حقول
+ * classification — فلو استبدلنا مباشرة رح تنمحي التصنيفات مع كل حفظة.
+ * هون منرجّع التصنيف القديم لأي سؤال وارد بلا تصنيف (مطابقة بنص السؤال).
+ * لما تتحدث التطبيقات لاحقاً وتبعت التصنيف بنفسها، قيمتها هي اللي بتعتمد.
+ */
+const merge_classifications = (old_questions, incoming_questions) => {
+  if (!Array.isArray(incoming_questions)) return incoming_questions;
+
+  const old_map = new Map();
+  for (const q of old_questions || []) {
+    if (q && q.classification) old_map.set(q.question, q);
+  }
+
+  return incoming_questions.map((q) => {
+    if (!q || q.classification || !old_map.has(q.question)) return q;
+    const old = old_map.get(q.question);
+    return {
+      ...q,
+      classification: old.classification,
+      classification_confidence: old.classification_confidence || 0,
+    };
+  });
+};
+
+/**
  * @param {import('express').Request} req
  * @param {import('express').Response} res
  */
@@ -52,7 +78,11 @@ export const Update_Exam = async (req, res) => {
       }
 
       // أبقِ كل معلومات المادة كما هي، وغيّر الأسئلة فقط
-      The_Exam.questions = new_questions;
+      // (مع الحفاظ على تصنيفات الذكاء الاصطناعي المخزّنة)
+      The_Exam.questions = merge_classifications(
+        The_Exam.questions,
+        new_questions,
+      );
       await The_Exam.save();
 
       // أضف معلومات الجلسة لسجل العضو
@@ -105,7 +135,10 @@ export const Update_Exam = async (req, res) => {
     // تحديث بيانات المادة
     The_Exam.name = new_name;
     The_Exam.info = new_info;
-    The_Exam.questions = new_questions;
+    The_Exam.questions = merge_classifications(
+      The_Exam.questions,
+      new_questions,
+    );
     The_Exam.time = new_time;
     The_Exam.visible = new_visible;
     The_Exam.available_to = clean_new_available_to;

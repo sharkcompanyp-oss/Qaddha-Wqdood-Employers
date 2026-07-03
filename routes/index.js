@@ -26,6 +26,7 @@ import {
   Delete_Employer,
 } from "../controllers/employers_crud_controller.js";
 import { Assign_Subject_To_Employer } from "../controllers/assign_subject_controller.js";
+import { Store_Classifications } from "../controllers/store_classifications_controller.js";
 
 const router = express.Router();
 
@@ -55,6 +56,9 @@ router.post("/addemployer", Add_Employer);
 router.put("/updateemployer", Update_Employer);
 router.delete("/deleteemployer", Delete_Employer);
 router.post("/assignsubject", Assign_Subject_To_Employer);
+
+// تخزين تصنيفات الذكاء الاصطناعي للأسئلة (حقول اختيارية — ما بتأثر عالتطبيقات الحالية)
+router.post("/storeclassifications", Store_Classifications);
 
 router.get("/health", Health);
 

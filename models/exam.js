@@ -110,6 +110,15 @@ const SUBJECTS_SCHEMA = mongoose.Schema({
         options: { type: [String], required: true },
         answer: { type: String, required: true },
         lecture: { type: String, required: false, default: "" },
+        // ─── حقول تصنيف الذكاء الاصطناعي (اختيارية بالكامل) ───
+        // القيم الممكنة: "accepted" | "needs_edit" | "rejected" | ""
+        classification: { type: String, required: false, default: "" },
+        // ثقة النموذج بالتصنيف (0 إلى 1)
+        classification_confidence: {
+          type: Number,
+          required: false,
+          default: 0,
+        },
       },
     ],
   },
