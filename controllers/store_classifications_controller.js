@@ -1,9 +1,11 @@
 import Exams from "../models/exam.js";
+import QuestionClassifications from "../models/question_classification.js";
 
 const VALID_LABELS = ["accepted", "needs_edit", "rejected", ""];
 
 /**
- * استقبال أسئلة مصنّفة (من نموذج MCQ Classifier) وتخزين تصنيفها في القاعدة.
+ * استقبال أسئلة مصنّفة (من نموذج MCQ Classifier) وتخزين تصنيفها في
+ * الكولكشن المستقل QuestionClassifications — مستند المادة نفسه لا يُمسّ.
  *
  * POST /storeclassifications
  * body: {
@@ -17,8 +19,10 @@ const VALID_LABELS = ["accepted", "needs_edit", "rejected", ""];
  *   ]
  * }
  *
- * المطابقة تتم بنص السؤال. التصنيف "" يمسح تصنيف السؤال.
- * كل الحقول اختيارية بالسكيمة، فما في أي تأثير على التطبيقات الحالية.
+ * المطابقة بنص السؤال:
+ * - إن وُجد السؤال في مستند التصنيفات ← يُحدَّث تصنيفه وثقته.
+ * - وإلا إن وُجد في أسئلة المادة ← يُضاف بكامل بياناته (خيارات/جواب/محاضرة).
+ * - التصنيف "" يحذف السؤال من مستند التصنيفات.
  *
  * @param {import('express').Request} req
  * @param {import('express').Response} res
@@ -39,33 +43,79 @@ export const Store_Classifications = async (req, res) => {
       return res.status(404).json({ message: "المادة غير موجودة" });
     }
 
-    // خريطة: نص السؤال -> التصنيف الوارد
-    const incoming = new Map();
-    for (const item of classifications) {
-      if (!item || typeof item.question !== "string") continue;
-      if (!VALID_LABELS.includes(item.classification)) continue;
-      incoming.set(item.question, item);
+    let doc = await QuestionClassifications.findOne({
+      subject_id: String(The_Exam._id),
+    });
+    if (!doc) {
+      doc = new QuestionClassifications({
+        subject_id: String(The_Exam._id),
+        questions: [],
+      });
+    }
+
+    // أسئلة المادة بنصّها — لإكمال بيانات الأسئلة المضافة لأول مرة
+    const exam_map = new Map();
+    for (const q of The_Exam.questions || []) {
+      exam_map.set(q.question, q);
     }
 
     let updated = 0;
-    for (const q of The_Exam.questions) {
-      const match = incoming.get(q.question);
-      if (!match) continue;
-      q.classification = match.classification;
-      q.classification_confidence =
-        typeof match.confidence === "number"
-          ? Math.max(0, Math.min(1, match.confidence))
+    let not_found = 0;
+    for (const item of classifications) {
+      if (!item || typeof item.question !== "string") continue;
+      if (!VALID_LABELS.includes(item.classification)) continue;
+
+      const confidence =
+        typeof item.confidence === "number"
+          ? Math.max(0, Math.min(1, item.confidence))
           : 0;
-      updated += 1;
+
+      const existing = doc.questions.find(
+        (e) => e.question === item.question,
+      );
+
+      if (item.classification === "") {
+        // مسح التصنيف = حذف السؤال من مستند التصنيفات
+        if (existing) {
+          doc.questions = doc.questions.filter(
+            (e) => e.question !== item.question,
+          );
+          updated += 1;
+        }
+        continue;
+      }
+
+      if (existing) {
+        existing.classification = item.classification;
+        existing.classification_confidence = confidence;
+        existing.logged_at = new Date();
+        updated += 1;
+      } else if (exam_map.has(item.question)) {
+        const q = exam_map.get(item.question);
+        doc.questions.push({
+          question: q.question,
+          options: [...(q.options || [])],
+          answer: String(q.answer ?? ""),
+          lecture: q.lecture || "",
+          classification: item.classification,
+          classification_confidence: confidence,
+          logged_at: new Date(),
+        });
+        updated += 1;
+      } else {
+        not_found += 1;
+      }
     }
 
-    await The_Exam.save();
+    doc.subject_name = The_Exam.name || "";
+    doc.updated_at = new Date();
+    await doc.save();
 
     res.status(200).json({
       message: "تم تخزين التصنيفات",
       updated,
-      not_found: incoming.size - updated,
-      total_questions: The_Exam.questions.length,
+      not_found,
+      total_classified: doc.questions.length,
     });
   } catch (error) {
     console.log(error);

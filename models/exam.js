@@ -110,38 +110,10 @@ const SUBJECTS_SCHEMA = mongoose.Schema({
         options: { type: [String], required: true },
         answer: { type: String, required: true },
         lecture: { type: String, required: false, default: "" },
-        // ─── حقول تصنيف الذكاء الاصطناعي (اختيارية بالكامل) ───
-        // القيم الممكنة: "accepted" | "needs_edit" | "rejected" | ""
-        classification: { type: String, required: false, default: "" },
-        // ثقة النموذج بالتصنيف (0 إلى 1)
-        classification_confidence: {
-          type: Number,
-          required: false,
-          default: 0,
-        },
       },
     ],
   },
   summary: { type: [SummarySchema], required: false, default: null },
-  // ─── سجل أمثلة تدريب المصنّف (اختياري بالكامل) ───
-  // الأسئلة المحذوفة أثناء التعديل (rejected) والنسخ الأصلية قبل التعديل
-  // (needs_edit). بنفس صيغة استيراد النموذج: يُلصق محتواه مباشرة في
-  // صندوق "استيراد JSON" بواجهة MCQ Classifier.
-  classification_log: {
-    type: [
-      {
-        question: { type: String, required: false, default: "" },
-        options: { type: [String], required: false, default: [] },
-        answer: { type: String, required: false, default: "" },
-        lecture: { type: String, required: false, default: "" },
-        classification: { type: String, required: false, default: "" },
-        logged_at: { type: Date, required: false, default: Date.now },
-        _id: false,
-      },
-    ],
-    required: false,
-    default: [],
-  },
 });
 
 export default mongoose.model("Subjects", SUBJECTS_SCHEMA);
