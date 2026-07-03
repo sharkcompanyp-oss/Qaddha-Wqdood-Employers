@@ -32,6 +32,43 @@ const merge_classifications = (old_questions, incoming_questions) => {
 };
 
 /**
+ * إلحاق أمثلة تدريب المصنّف بسجل المادة (classification_log):
+ * الأسئلة المحذوفة أثناء التعديل (rejected) والنسخ الأصلية قبل التعديل
+ * (needs_edit). إلحاق فقط — ما منستبدل السجل، فالتطبيقات اللي ما بتبعت
+ * الحقل ما بتأثر عليه. التكرار الحرفي (نفس النص ونفس التصنيف) بينتجاهل.
+ */
+const LOG_LABELS = ["needs_edit", "rejected"];
+const append_classification_log = (The_Exam, incoming_log) => {
+  if (!Array.isArray(incoming_log) || incoming_log.length === 0) return 0;
+
+  const existing = new Set(
+    (The_Exam.classification_log || []).map(
+      (e) => `${e.classification}::${e.question}`,
+    ),
+  );
+
+  let added = 0;
+  for (const item of incoming_log) {
+    if (!item || typeof item.question !== "string" || !item.question.trim())
+      continue;
+    if (!LOG_LABELS.includes(item.classification)) continue;
+    const key = `${item.classification}::${item.question}`;
+    if (existing.has(key)) continue;
+    existing.add(key);
+    The_Exam.classification_log.push({
+      question: item.question,
+      options: Array.isArray(item.options) ? item.options.map(String) : [],
+      answer: String(item.answer ?? ""),
+      lecture: typeof item.lecture === "string" ? item.lecture : "",
+      classification: item.classification,
+      logged_at: new Date(),
+    });
+    added += 1;
+  }
+  return added;
+};
+
+/**
  * @param {import('express').Request} req
  * @param {import('express').Response} res
  */
@@ -50,6 +87,8 @@ export const Update_Exam = async (req, res) => {
       new_open_mode,
       new_price,
       new_summary,
+      // سجل أمثلة تدريب المصنّف (اختياري) — أسئلة محذوفة/نسخ أصلية قبل التعديل
+      new_classification_log,
       // ─── حقول مسار العضو ───
       employee, // true إذا كان الحفظ صادراً من تطبيق العضو
       employer_id, // _id العضو
@@ -83,6 +122,7 @@ export const Update_Exam = async (req, res) => {
         The_Exam.questions,
         new_questions,
       );
+      append_classification_log(The_Exam, new_classification_log);
       await The_Exam.save();
 
       // أضف معلومات الجلسة لسجل العضو
@@ -150,6 +190,7 @@ export const Update_Exam = async (req, res) => {
     if (Array.isArray(new_summary) && new_summary.length > 0) {
       The_Exam.summary = new_summary;
     }
+    append_classification_log(The_Exam, new_classification_log);
 
     await The_Exam.save();
 
