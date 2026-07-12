@@ -17,6 +17,13 @@ import { Health } from "../controllers/health_Controller.js";
 import { set_price_for_question } from "../controllers/price_for_question_controller.js";
 import { Get_Complaints } from "../controllers/get_complaints_controller.js";
 import { Responde_To_Complaint } from "../controllers/responde_to_complaint_controller.js";
+import {
+  Get_Agent_Config,
+  Update_Agent_Config,
+  Run_Agent,
+  Upload_Lectures,
+  Get_Lectures_Summary,
+} from "../controllers/agent_controller.js";
 import { Employer_Login } from "../controllers/employer_login_controller.js";
 import { Get_Employer_Subjects } from "../controllers/get_employer_subjects_controller.js";
 import {
@@ -53,6 +60,13 @@ router.get("/analytics", Get_Analytics);
 router.post("/priceforquestion", set_price_for_question);
 router.get("/complaints", Get_Complaints);
 router.post("/responde-to-complaint", Responde_To_Complaint);
+
+// ─── وكيل معالجة الشكاوى الذكي ─────────────────────────────────────────────
+router.get("/agent/config", Get_Agent_Config);
+router.post("/agent/config", Update_Agent_Config);
+router.post("/agent/run", Run_Agent);
+router.post("/agent/upload-lectures", Upload_Lectures);
+router.get("/agent/lectures-summary", Get_Lectures_Summary);
 
 // ─── العضوون ──────────────────────────────────────────────────────────────────
 router.post("/employerlogin", Employer_Login);
