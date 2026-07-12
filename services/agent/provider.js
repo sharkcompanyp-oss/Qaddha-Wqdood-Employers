@@ -108,6 +108,13 @@ async function askOpenAICompat({ label, url, envName, model, prompt, key }) {
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${key}`,
+      // بعض المزوّدين (مثل Dahl خلف Cloudflare) يحجبون الطلبات بلا User-Agent
+      // معتبرينها بوتاً؛ نرسل UA متصفح لتمرّ. وHeaders موصى بها من OpenRouter.
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "HTTP-Referer": "https://qaddha-wqdood-employers.onrender.com",
+      "X-Title": "Qaddha Complaint Agent",
     },
     body: JSON.stringify({
       model,
