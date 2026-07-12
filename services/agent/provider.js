@@ -4,24 +4,60 @@
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1/chat/completions";
+const OPENROUTER_MODELS = "https://openrouter.ai/api/v1/models";
 
-// النماذج المتاحة للاختيار من الواجهة (قابلة للتوسعة بسهولة)
-export const AVAILABLE_MODELS = {
-  gemini: [
-    "gemini-2.0-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-2.5-flash",
-    "gemini-2.5-pro",
-    "gemini-1.5-flash",
-  ],
-  openrouter: [
-    "google/gemini-2.0-flash-exp:free",
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "nvidia/llama-3.1-nemotron-70b-instruct:free",
-    "openai/gpt-oss-120b:free",
-    "deepseek/deepseek-chat-v3.1:free",
-  ],
+// قائمة احتياطية صغيرة تُستخدم فقط إن فشل جلب القائمة الحيّة من الـ API.
+const FALLBACK_MODELS = {
+  gemini: ["gemini-2.5-flash", "gemini-2.0-flash"],
+  openrouter: ["google/gemini-2.0-flash-exp:free"],
 };
+
+// كاش بسيط للقوائم الحيّة (تُجلب كل ساعة) حتى لا نضرب الـ API في كل طلب.
+let _modelsCache = { at: 0, data: null };
+
+// يجلب كل النماذج المتاحة فعلياً من الـ API مباشرة (Gemini + OpenRouter) — فتظهر
+// كل النماذج الجديدة تلقائياً دون تعديل الكود. يقع على القائمة الاحتياطية عند الفشل.
+export async function listAvailableModels(apiKeys = {}) {
+  const now = Date.now();
+  if (_modelsCache.data && now - _modelsCache.at < 3600_000) {
+    return _modelsCache.data;
+  }
+  const [gemini, openrouter] = await Promise.all([
+    listGeminiModels(apiKeys.gemini).catch(() => FALLBACK_MODELS.gemini),
+    listOpenRouterModels().catch(() => FALLBACK_MODELS.openrouter),
+  ]);
+  const data = {
+    gemini: gemini.length ? gemini : FALLBACK_MODELS.gemini,
+    openrouter: openrouter.length ? openrouter : FALLBACK_MODELS.openrouter,
+  };
+  _modelsCache = { at: now, data };
+  return data;
+}
+
+async function listGeminiModels(key) {
+  if (!key) return [];
+  const res = await fetch(`${GEMINI_BASE}?key=${key}&pageSize=1000`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.models || [])
+    // نُبقي فقط النماذج التي تدعم توليد المحتوى، ونحذف البادئة "models/"
+    .filter((m) =>
+      (m.supportedGenerationMethods || []).includes("generateContent"),
+    )
+    .map((m) => (m.name || "").replace(/^models\//, ""))
+    .filter(Boolean)
+    .sort();
+}
+
+async function listOpenRouterModels() {
+  const res = await fetch(OPENROUTER_MODELS);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.data || [])
+    .map((m) => m.id)
+    .filter(Boolean)
+    .sort();
+}
 
 // يرسل مطالبة نصية ويعيد النص الخام. يرمي خطأً واضحاً عند الفشل ليُلتقط أعلى.
 export async function askText({ provider, model, prompt, apiKeys }) {

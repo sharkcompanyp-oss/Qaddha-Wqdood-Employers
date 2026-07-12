@@ -3,7 +3,7 @@
 
 import dotenv from "dotenv";
 import { runAgent } from "../services/agent/runner.js";
-import { AVAILABLE_MODELS } from "../services/agent/provider.js";
+import { listAvailableModels } from "../services/agent/provider.js";
 import AgentSetting from "../models/agent_setting.js";
 import LectureText from "../models/lecture_text.js";
 
@@ -23,6 +23,10 @@ export const Get_Agent_Config = async (req, res) => {
     let setting = await AgentSetting.findOne({ key: "default" });
     if (!setting) setting = await AgentSetting.create({ key: "default" });
     const lectureCount = await LectureText.estimatedDocumentCount();
+    // القائمة الحيّة الكاملة من الـ API (تُحدّث تلقائياً)
+    const available_models = await listAvailableModels({
+      gemini: process.env.GEMINI_API_KEY,
+    });
     res.status(200).json({
       setting: {
         provider: setting.provider,
@@ -31,7 +35,7 @@ export const Get_Agent_Config = async (req, res) => {
         threshold: setting.threshold,
         limit: setting.limit,
       },
-      available_models: AVAILABLE_MODELS,
+      available_models,
       lecture_count: lectureCount,
       keys_present: {
         gemini: !!process.env.GEMINI_API_KEY,
