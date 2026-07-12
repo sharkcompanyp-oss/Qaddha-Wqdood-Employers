@@ -249,6 +249,7 @@ export async function runAgent({ overrides = {} } = {}) {
     apiKeys: {
       gemini: process.env.GEMINI_API_KEY,
       openrouter: process.env.OPENROUTER_API_KEY,
+      dahl: process.env.DAHL_API_KEY,
     },
   };
 
