@@ -90,35 +90,78 @@ export async function findSubjectAcrossSections(subjectName, sections, ctx) {
   return { section: null, folder: null };
 }
 
-// فهرس محاضرات المادة: {file, id, preview} — بداية النص لتمييز الموضوع
-export async function buildIndex(section, subject, headChars = 600) {
+// فهرس محاضرات المادة: {id, file, preview, full} — نحتفظ بالنص الكامل أيضاً
+// للبحث النصّي الإسنادي (fallback) إن لم يجزم النموذج.
+export async function buildIndex(section, subject, headChars = 1200) {
   const rows = await LectureText.find({ section, subject }).lean();
   return rows.map((r) => {
     const cleaned = (r.text || "")
       .replace(/=====\s*(صفحة|شريحة)\s*\d+\s*=====/g, " ")
       .replace(/\s+/g, " ")
       .trim();
-    return { id: String(r._id), file: r.file, preview: cleaned.slice(0, headChars) };
+    return {
+      id: String(r._id),
+      file: r.file,
+      preview: cleaned.slice(0, headChars),
+      full: cleaned, // للبحث النصّي عند اللزوم
+    };
   });
 }
 
-// النموذج يختار المحاضرة الأنسب لاسم المحاضرة في الشكوى (بحث دلالي على الفهرس)
-export async function pickLecture(lectureName, index, ctx) {
+// كلمات مفتاحية مفيدة من نصٍّ (تتجاهل حروف الجر/العطف القصيرة)
+function keyWords(s) {
+  return norm(s)
+    .split(" ")
+    .map((w) => (w.startsWith("و") && w.length > 2 ? w.slice(1) : w))
+    .map((w) => (w.startsWith("ال") && w.length > 3 ? w.slice(2) : w))
+    .filter((w) => w.length >= 3);
+}
+
+// يختار الوكيل المحاضرة الأنسب. الذكاء أولاً (النموذج يبحث دلالياً باسم المحاضرة
+// + نص الشكوى نفسها + مقتطفات أطول)، ثم خطة إسناد نصّية، ثم إن بقيت محاضرة
+// واحدة فقط نأخذها. لا نستسلم لـ null بسهولة.
+export async function pickLecture(lectureName, index, ctx, claim = "") {
   if (!index.length) return null;
+  if (index.length === 1) return index[0].id; // مادة بمحاضرة واحدة → حسمها
+
   const listing = index
-    .map((it, i) => `[${i}] ${it.file}\n    مقتطف: ${it.preview.slice(0, 200)}`)
-    .join("\n");
+    .map((it, i) => `[${i}] الملف: ${it.file}\n    مقتطف: ${it.preview.slice(0, 500)}`)
+    .join("\n\n");
+
   const prompt =
-    "أنت تبحث عن المحاضرة الصحيحة. اسم المحاضرة في الشكوى قد لا يطابق اسم الملف. " +
-    "اعتمد على اسم المحاضرة ومقتطف بداية كل ملف لتختار الأنسب دلالياً.\n\n" +
-    `اسم المحاضرة المطلوبة: ${lectureName}\n\nقائمة المحاضرات:\n${listing}` +
-    '\n\nأعد JSON فقط: {"index": رقم أو null}';
+    "مهمتك: اختيار المحاضرة التي يتحدّث عنها الطالب في شكواه، من قائمة محاضرات المادة.\n" +
+    "مهم: اسم المحاضرة في الشكوى قد لا يُذكر حرفياً في الملف أو مقتطفه — استدلّ بذكاء " +
+    "من الموضوع العام لكل محاضرة (من المقتطف) ومن نص شكوى الطالب. اختر الأقرب موضوعياً.\n" +
+    "اختر رقماً دائماً إن وُجد أي احتمال معقول؛ لا تُعد null إلا إذا كان الموضوع لا " +
+    "يمتّ بصلة لأي محاضرة إطلاقاً.\n\n" +
+    `اسم المحاضرة في الشكوى: ${lectureName || "(غير محدّد)"}\n` +
+    `نص شكوى الطالب: ${claim || "(غير متوفر)"}\n\n` +
+    `محاضرات المادة:\n${listing}\n\n` +
+    'أعد JSON فقط: {"index": رقم المحاضرة الأنسب, "confidence": 0..1}';
+
   try {
     const out = extractJson(await askText({ ...ctx, prompt }));
     const i = out.index;
     if (Number.isInteger(i) && i >= 0 && i < index.length) return index[i].id;
   } catch {
-    /* تجاهل */
+    /* نتابع للخطة البديلة */
+  }
+
+  // خطة إسناد نصّية: طابِق كلمات (اسم المحاضرة + الشكوى) داخل النص الكامل لكل ملف.
+  const terms = [...new Set([...keyWords(lectureName), ...keyWords(claim)])];
+  if (terms.length) {
+    let best = null,
+      bestScore = 0;
+    for (const it of index) {
+      const hay = norm(it.full);
+      let score = 0;
+      for (const t of terms) if (hay.includes(t)) score += 1;
+      if (score > bestScore) {
+        bestScore = score;
+        best = it;
+      }
+    }
+    if (best && bestScore > 0) return best.id;
   }
   return null;
 }

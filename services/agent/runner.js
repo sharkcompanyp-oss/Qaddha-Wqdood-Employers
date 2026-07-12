@@ -174,7 +174,8 @@ async function processOne(c, cfg, ctx) {
   if (!index.length)
     return human(`المادة '${folder}' لا تحتوي نصوص محاضرات بعد — للمقرّر.`);
 
-  const lecId = await lectures.pickLecture(c.lecture_name, index, ctx);
+  // نمرّر نص الشكوى أيضاً ليستدلّ النموذج بالموضوع لا بالاسم الحرفي فقط
+  const lecId = await lectures.pickLecture(c.lecture_name, index, ctx, c.complaint);
   if (!lecId)
     return human(
       `لم أجد المحاضرة '${c.lecture_name}' ضمن مادة '${folder}'.`,
