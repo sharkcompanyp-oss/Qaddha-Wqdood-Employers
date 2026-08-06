@@ -30,7 +30,16 @@ export const Update_Exam = async (req, res) => {
       employee, // true إذا كان الحفظ صادراً من تطبيق العضو
       employer_id, // _id العضو
       elapsed_seconds, // الوقت المنقضي من بدء التعديل إلى الحفظ
+      PASSWORD,
     } = req.body;
+
+    // مسار الأدمن كان بلا حارس إطلاقاً: من يعرف الرابط يعدّل أي مادة.
+    // مسار العضو يتحقّق بملكيته للمادة أدناه، فيُستثنى من كلمة السرّ.
+    if (employee !== true) {
+      if (!PASSWORD || PASSWORD !== process.env.PASSWORD) {
+        return res.status(401).json({ message: "غير مصرّح" });
+      }
+    }
 
     if (!_id) {
       return res.status(400).json({ message: "رمز المادة ناقص" });
@@ -90,7 +99,7 @@ export const Update_Exam = async (req, res) => {
         )
       : [];
 
-    const clean_old_available_to = The_Exam.available_to.filter(
+    const clean_old_available_to = (The_Exam.available_to || []).filter(
       (x) => x !== null && x !== undefined && x !== "",
     );
 

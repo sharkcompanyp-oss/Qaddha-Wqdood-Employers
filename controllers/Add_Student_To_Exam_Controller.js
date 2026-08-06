@@ -98,7 +98,7 @@ export const Add_Student_To_Exam = async (req, res) => {
       exam: {
         name: The_Exam.name,
         price: The_Exam.price,
-        studentsCount: The_Exam.available_to.length,
+        studentsCount: (The_Exam.available_to || []).length,
         freeSubscriptions: The_Exam.number_of_free_subscriptions,
       },
     });

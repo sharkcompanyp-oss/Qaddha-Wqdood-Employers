@@ -196,7 +196,7 @@ export const Save_Part = async (req, res) => {
           front: String(c.front || ""),
           back: String(c.back || ""),
         }));
-      changed.push(`flash:${lecture.flash_cards.length}`);
+      changed.push(`flash:${(lecture.flash_cards || []).length}`);
     }
 
     // ─── الاختبار التحريري ────────────────────────────────────────────────────
@@ -212,7 +212,7 @@ export const Save_Part = async (req, res) => {
             model_answer: String(q.model_answer || ""),
           })),
       };
-      changed.push(`written:${lecture.written_exam.questions.length}`);
+      changed.push(`written:${(lecture.written_exam.questions || []).length}`);
     }
 
     // ─── ربط نص المقرر ────────────────────────────────────────────────────────
