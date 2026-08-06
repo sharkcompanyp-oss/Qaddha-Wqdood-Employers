@@ -28,8 +28,11 @@ import {
 } from "../controllers/spellcheck_controller.js";
 import { Generate_Items } from "../controllers/generate_controller.js";
 import {
-  Transcribe_Audio,
   Transcribe_Models,
+  Transcribe_Start,
+  Transcribe_Status,
+  Transcribe_Run,
+  Transcribe_Cleanup,
 } from "../controllers/transcribe_controller.js";
 import { Add_Student_To_Exam } from "../controllers/Add_Student_To_Exam_Controller.js";
 import { Get_Requests } from "../controllers/get_requests_controller.js";
@@ -103,9 +106,13 @@ router.post("/production/mistral-ocr", Mistral_Ocr);
 router.post("/production/gemini-models", Gemini_Models);
 router.post("/production/spellcheck", Spellcheck_Chunk);
 router.post("/production/generate", bigBody, Generate_Items);
-// تفريغ الصوت — الملفات الصوتية ضخمة فتحتاج الحدّ الأوسع
+// تفريغ الصوت: البايتات تذهب من المتصفّح إلى Google مباشرةً، فلا يمرّ
+// بخادمنا إلا أجسامٌ صغيرة (روابط وأسماء) — لا حاجة للحدّ الأوسع.
 router.post("/production/transcribe-models", Transcribe_Models);
-router.post("/production/transcribe", bigBody, Transcribe_Audio);
+router.post("/production/transcribe-start", Transcribe_Start);
+router.post("/production/transcribe-status", Transcribe_Status);
+router.post("/production/transcribe-run", Transcribe_Run);
+router.post("/production/transcribe-cleanup", Transcribe_Cleanup);
 router.post("/addstudenttoexam", Add_Student_To_Exam);
 router.post("/getrequests", Get_Requests);
 router.delete("/rejectrequest", Reject_Request);

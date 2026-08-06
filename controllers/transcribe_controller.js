@@ -3,15 +3,22 @@ import dotenv from "dotenv";
 dotenv.config();
 
 // ─── تفريغ الصوت إلى نصّ مقرَّر ────────────────────────────────────────────────
-// منقول عن audio-transcriber (app.py) بنفس منطقه: الملف الصغير يُرسَل مباشرةً
-// والكبير عبر Files API ثم يُحذف من خوادم Google.
+// مبني على audio-transcriber (app.py) لكن بمعمارٍ مختلف اضطراراً:
 //
-// الفارق الوحيد: المخرَج ماركداون لا نصّاً خاماً — لأن الناتج هنا يصير **نصّ
-// المقرَّر** ويمرّ على ما يمرّ عليه سواه: عارض الماركداون، والتدقيق الإملائي،
-// وتوليد البطاقات. نصٌّ بلا عناوين يصير كتلةً واحدة لا يُقرأ منها شيء.
+// هناك: المتصفّح ← خادم محلّي على جهازك ← Google. الملف يمرّ بخطوة واحدة
+//       على شبكةٍ محلّية، والذاكرة ذاكرة جهازك.
+// هنا:  المتصفّح ← Render ← Google. تسجيل ساعة (60م.ب) يصير 79م.ب بعد
+//       base64، و~198م.ب في ذاكرة Render التي سعتها 512م.ب → انهيار (502)،
+//       والرفع نفسه عبر شبكةٍ بطيئة → Network Error.
+//
+// لذلك: **الملف لا يمرّ بخادمنا إطلاقاً**. الخادم يطلب من Google رابط رفعٍ
+// قابلاً للاستئناف (بمفتاحه السرّي)، ويسلّمه للمتصفّح، فيرفع المتصفّح
+// البايتات إلى Google مباشرةً. الرابط نفسه هو التصريح، فلا يتسرّب المفتاح.
+//
+// النتيجة: صفر بايت صوت على خادمنا، وصفر base64، ولا حدّ لحجم الملف
+// سوى حدّ Google (2 غ.ب).
 
 const GEMINI = "https://generativelanguage.googleapis.com/v1beta";
-const INLINE_LIMIT = 18 * 1024 * 1024; // نفس عتبة الأصل
 
 const DEFAULT_PROMPT = `فرّغ هذا التسجيل الصوتي إلى نصّ عربي مكتوب بدقة عالية، وأخرجه بصيغة ماركداون.
 
@@ -30,17 +37,7 @@ const DEFAULT_PROMPT = `فرّغ هذا التسجيل الصوتي إلى نص�
 
 لا تضف أي تعليق أو مقدّمة أو خاتمة من عندك — أخرج النصّ المفرّغ وحده.`;
 
-// نماذج لا تصلح للصوت (توليد صور/أصوات/تضمين…) — نفس قائمة الأصل
-const SKIP = [
-  "-tts",
-  "-image",
-  "image-",
-  "embedding",
-  "gemma",
-  "lyria",
-  "veo",
-  "imagen",
-];
+const SKIP = ["-tts", "-image", "image-", "embedding", "gemma", "lyria", "veo", "imagen"];
 
 const guard = (req, res) => {
   const { PASSWORD } = req.body || {};
@@ -51,7 +48,16 @@ const guard = (req, res) => {
   return true;
 };
 
-/** النماذج التي تقبل الصوت — القائمة من الحساب لا مكتوبة يدوياً */
+const keyOr503 = (res) => {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) {
+    res.status(503).json({ message: "GEMINI_API_KEY غير مضبوط في الخادم" });
+    return null;
+  }
+  return key;
+};
+
+/** النماذج التي تقبل الصوت */
 export const Transcribe_Models = async (req, res) => {
   try {
     if (!guard(req, res)) return;
@@ -62,9 +68,7 @@ export const Transcribe_Models = async (req, res) => {
     if (!r.ok) return res.status(200).json({ ready: true, models: [] });
     const data = await r.json();
     const models = (data.models || [])
-      .filter((m) =>
-        (m.supportedGenerationMethods || []).includes("generateContent"),
-      )
+      .filter((m) => (m.supportedGenerationMethods || []).includes("generateContent"))
       .map((m) => String(m.name).replace(/^models\//, ""))
       .filter((n) => /gemini/i.test(n))
       .filter((n) => !SKIP.some((b) => n.toLowerCase().includes(b)))
@@ -75,118 +79,121 @@ export const Transcribe_Models = async (req, res) => {
       current: process.env.GEMINI_MODEL || models[0] || "",
     });
   } catch (error) {
-    return res
-      .status(200)
-      .json({ ready: false, models: [], note: error.message });
+    return res.status(200).json({ ready: false, models: [], note: error.message });
   }
 };
 
-export const Transcribe_Audio = async (req, res) => {
+/** ١) يطلب رابط رفعٍ قابلاً للاستئناف ويسلّمه للمتصفّح.
+ *  المفتاح يُستعمل هنا ولا يُرسَل: الرابط العائد يحمل تصريحه في ذاته. */
+export const Transcribe_Start = async (req, res) => {
   try {
     if (!guard(req, res)) return;
-    const key = process.env.GEMINI_API_KEY;
-    if (!key) {
-      return res
-        .status(503)
-        .json({ message: "GEMINI_API_KEY غير مضبوط في الخادم" });
+    const key = keyOr503(res);
+    if (!key) return;
+
+    const { mimeType, sizeBytes, displayName } = req.body;
+    if (!sizeBytes || Number(sizeBytes) <= 0) {
+      return res.status(400).json({ message: "حجم الملف ناقص" });
     }
 
-    const { audioB64, mimeType, fileName, model, prompt } = req.body;
-    if (!audioB64) return res.status(400).json({ message: "الملف الصوتي ناقص" });
-    if (!model) return res.status(400).json({ message: "لم تُحدَّد النموذج" });
-
-    const bytes = Buffer.from(audioB64, "base64");
-    if (!bytes.length) return res.status(400).json({ message: "الملف فارغ" });
-
-    const use = String(model).replace(/^models\//, "");
-    const mime = mimeType || "audio/mpeg";
-    const text = String(prompt || "").trim() || DEFAULT_PROMPT;
-
-    let parts;
-    let uploadedName = null;
-
-    if (bytes.length < INLINE_LIMIT) {
-      parts = [{ text }, { inline_data: { mime_type: mime, data: audioB64 } }];
-    } else {
-      // الرفع بالبروتوكول القابل للاستئناف: خطوة بدءٍ ثم رفع البايتات
-      const start = await fetch(`${GEMINI}/files?key=${key}`, {
-        method: "POST",
-        headers: {
-          "X-Goog-Upload-Protocol": "resumable",
-          "X-Goog-Upload-Command": "start",
-          "X-Goog-Upload-Header-Content-Length": String(bytes.length),
-          "X-Goog-Upload-Header-Content-Type": mime,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          file: { display_name: fileName || "audio" },
-        }),
-      });
-      const uploadUrl = start.headers.get("x-goog-upload-url");
-      if (!uploadUrl) {
-        const t = await start.text();
-        return res.status(502).json({
-          message: "تعذّر بدء رفع الملف الصوتي",
-          detail: t.slice(0, 300),
-        });
-      }
-      const up = await fetch(uploadUrl, {
-        method: "POST",
-        headers: {
-          "Content-Length": String(bytes.length),
-          "X-Goog-Upload-Offset": "0",
-          "X-Goog-Upload-Command": "upload, finalize",
-        },
-        body: bytes,
-      });
-      if (!up.ok) {
-        const t = await up.text();
-        return res
-          .status(502)
-          .json({ message: "فشل رفع الملف الصوتي", detail: t.slice(0, 300) });
-      }
-      const info = await up.json();
-      const file = info?.file || info;
-      uploadedName = file?.name || null;
-
-      // الملف يُعالَج قبل أن يصير قابلاً للاستعمال — ننتظر جاهزيته
-      let state = file?.state;
-      const uri = file?.uri;
-      for (let i = 0; i < 30 && state === "PROCESSING"; i++) {
-        // eslint-disable-next-line no-await-in-loop
-        await new Promise((r) => setTimeout(r, 2000));
-        // eslint-disable-next-line no-await-in-loop
-        const chk = await fetch(`${GEMINI}/${uploadedName}?key=${key}`);
-        // eslint-disable-next-line no-await-in-loop
-        const j = await chk.json();
-        state = j?.state;
-      }
-      if (state !== "ACTIVE") {
-        return res
-          .status(502)
-          .json({ message: `الملف الصوتي لم يجهز (${state || "?"})` });
-      }
-      parts = [{ text }, { file_data: { mime_type: mime, file_uri: uri } }];
-    }
-
-    const r = await fetch(`${GEMINI}/models/${use}:generateContent?key=${key}`, {
+    const r = await fetch(`${GEMINI}/files?key=${key}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 65536 },
-      }),
+      headers: {
+        "X-Goog-Upload-Protocol": "resumable",
+        "X-Goog-Upload-Command": "start",
+        "X-Goog-Upload-Header-Content-Length": String(sizeBytes),
+        "X-Goog-Upload-Header-Content-Type": mimeType || "audio/mpeg",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ file: { display_name: displayName || "audio" } }),
     });
 
-    const raw = await r.text();
-
-    // ننظّف ملف Google في كل الأحوال — لا نترك تسجيلات المقرَّر على خوادمهم
-    if (uploadedName) {
-      fetch(`${GEMINI}/${uploadedName}?key=${key}`, { method: "DELETE" }).catch(
-        () => {},
-      );
+    const uploadUrl = r.headers.get("x-goog-upload-url");
+    if (!uploadUrl) {
+      const t = await r.text();
+      return res
+        .status(502)
+        .json({ message: "تعذّر بدء الرفع", detail: t.slice(0, 300) });
     }
+    return res.status(200).json({ uploadUrl });
+  } catch (error) {
+    console.error("Transcribe_Start:", error.message);
+    return res.status(502).json({ message: "تعذّر الاتصال بـGemini", error: error.message });
+  }
+};
 
+/** ٢) حالة الملف بعد الرفع — Google يعالجه قبل أن يصلح للاستعمال */
+export const Transcribe_Status = async (req, res) => {
+  try {
+    if (!guard(req, res)) return;
+    const key = keyOr503(res);
+    if (!key) return;
+
+    const { fileName } = req.body;
+    if (!fileName) return res.status(400).json({ message: "اسم الملف ناقص" });
+
+    const r = await fetch(`${GEMINI}/${fileName}?key=${key}`);
+    const j = await r.json();
+    return res.status(200).json({
+      state: j?.state || "UNKNOWN",
+      uri: j?.uri || null,
+      error: j?.error?.message || null,
+    });
+  } catch (error) {
+    return res.status(502).json({ message: "تعذّر فحص الحالة", error: error.message });
+  }
+};
+
+/** ٣) التفريغ من ملفٍ مرفوع سلفاً. الجسم صغير (رابط لا بايتات)،
+ *  لكن الرد يستغرق دقائق لتسجيلٍ طويل. */
+export const Transcribe_Run = async (req, res) => {
+  try {
+    if (!guard(req, res)) return;
+    const key = keyOr503(res);
+    if (!key) return;
+
+    const { fileUri, mimeType, model, prompt } = req.body;
+    if (!fileUri) return res.status(400).json({ message: "رابط الملف ناقص" });
+    if (!model) return res.status(400).json({ message: "لم يُحدَّد النموذج" });
+
+    const use = String(model).replace(/^models\//, "");
+    const text = String(prompt || "").trim() || DEFAULT_PROMPT;
+
+    // مهلة صريحة: الاتصال المعلَّق بلا حدّ يستهلك عاملاً على الخادم إلى الأبد
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 14 * 60 * 1000);
+
+    let r;
+    try {
+      r = await fetch(`${GEMINI}/models/${use}:generateContent?key=${key}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: ac.signal,
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                { text },
+                { file_data: { mime_type: mimeType || "audio/mpeg", file_uri: fileUri } },
+              ],
+            },
+          ],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 65536 },
+        }),
+      });
+    } catch (e) {
+      clearTimeout(timer);
+      if (e.name === "AbortError") {
+        return res.status(504).json({
+          message:
+            "تجاوز التفريغ أربع عشرة دقيقة. قسّم التسجيل إلى أجزاء أقصر وأعد.",
+        });
+      }
+      throw e;
+    }
+    clearTimeout(timer);
+
+    const raw = await r.text();
     if (!r.ok) {
       let retryAfter = null;
       const m = raw.match(/"retryDelay"\s*:\s*"(\d+)s"/);
@@ -205,23 +212,36 @@ export const Transcribe_Audio = async (req, res) => {
     const cand = data?.candidates?.[0];
     const out = cand?.content?.parts?.map((p) => p.text || "").join("") || "";
     if (!out.trim()) {
-      return res
-        .status(502)
-        .json({ message: "أعاد النموذج نصّاً فارغاً — أعد المحاولة" });
+      return res.status(502).json({ message: "أعاد النموذج نصّاً فارغاً — أعد المحاولة" });
     }
 
     return res.status(200).json({
       text: out.trim(),
       model: use,
-      // البتر يعني تسجيلاً أطول من سعة المخرَج — نقوله بدل قبول ناقصٍ صامتاً
       truncated: cand?.finishReason === "MAX_TOKENS",
       finishReason: cand?.finishReason || "",
     });
   } catch (error) {
-    console.error("Transcribe_Audio:", error.message);
-    return res
-      .status(502)
-      .json({ message: "تعذّر الاتصال بـGemini", error: error.message });
+    console.error("Transcribe_Run:", error.message);
+    return res.status(502).json({ message: "تعذّر الاتصال بـGemini", error: error.message });
+  }
+};
+
+/** ٤) حذف الملف من خوادم Google — لا نترك تسجيلات المقرَّر عندهم */
+export const Transcribe_Cleanup = async (req, res) => {
+  try {
+    if (!guard(req, res)) return;
+    const key = keyOr503(res);
+    if (!key) return;
+    const { fileName } = req.body;
+    if (fileName) {
+      await fetch(`${GEMINI}/${fileName}?key=${key}`, { method: "DELETE" }).catch(
+        () => {},
+      );
+    }
+    return res.status(200).json({ ok: true });
+  } catch {
+    return res.status(200).json({ ok: false });
   }
 };
 
