@@ -1,5 +1,6 @@
 import Students from "../models/student.js";
 import complaint from "../models/complaint.js";
+import PointsLedger from "../models/points_ledger.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -28,10 +29,26 @@ export const Responde_To_Complaint = async (req, res) => {
     if (points_to_add) {
       The_Student.points += Number(points_to_add);
       await The_Student.save();
+
+      // تسجيل الحركة في دفتر النقاط (شكوى صحيحة = 30 حسب دليل النقاط)
+      try {
+        await PointsLedger.create({
+          student_ID: String(student_ID),
+          delta: Number(points_to_add),
+          reason_code: "complaint_valid",
+          note: "شكوى صحيحة عن خطأ علمي/إملائي",
+          source_type: "complaint",
+          source_id: String(complaint_id),
+        });
+      } catch (ledgerErr) {
+        console.error("فشل تسجيل حركة النقاط:", ledgerErr);
+      }
     }
 
     // إرسال إشعار للطالب
-    await fetch("https://exams-back.onrender.com/notify-student", {
+    const EXAMS_BACKEND_URL =
+      process.env.EXAMS_BACKEND_URL || "https://exams-back.onrender.com";
+    await fetch(`${EXAMS_BACKEND_URL}/notify-student`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

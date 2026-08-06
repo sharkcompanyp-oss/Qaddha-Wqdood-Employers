@@ -1,72 +1,10 @@
 import Exams from "../models/exam.js";
 import Admins from "../models/admin.js"; // تأكد من الاسم الصحيح
 import Employers from "../models/employer.js";
-import QuestionClassifications from "../models/question_classification.js";
+import { recomputeMoadalAvailability } from "../services/moadal_eligibility.js";
 import dotenv from "dotenv";
 
 dotenv.config();
-
-const VALID_LABELS = ["accepted", "needs_edit", "rejected"];
-
-const clean_classification_entry = (item) => {
-  if (!item || typeof item.question !== "string" || !item.question.trim())
-    return null;
-  if (!VALID_LABELS.includes(item.classification)) return null;
-  return {
-    question: item.question,
-    options: Array.isArray(item.options) ? item.options.map(String) : [],
-    answer: String(item.answer ?? ""),
-    lecture: typeof item.lecture === "string" ? item.lecture : "",
-    classification: item.classification,
-    classification_confidence:
-      typeof item.classification_confidence === "number"
-        ? Math.max(0, Math.min(1, item.classification_confidence))
-        : 0,
-    logged_at: new Date(),
-  };
-};
-
-/**
- * تخزين تصنيفات جلسة التعديل في الكولكشن المستقل (QuestionClassifications).
- * القادم من المحرر: لقطة حية كاملة (accepted) + أمثلة الجلسة الجديدة
- * (needs_edit للنسخ الأصلية قبل التعديل، rejected للمحذوف).
- * الدمج: اللقطة الحية تستبدل accepted القديمة بالكامل، بينما أمثلة
- * needs_edit/rejected القديمة تبقى (تاريخ تدريب) مع منع التكرار الحرفي
- * (نفس النص ونفس التصنيف). التطبيقات اللي ما بتبعت الحقل ما بتتأثر،
- * ومستند المادة نفسه ما ينكتب فيه أي حقل تصنيف.
- */
-const upsert_question_classifications = async (The_Exam, incoming) => {
-  if (!Array.isArray(incoming) || incoming.length === 0) return;
-
-  const fresh = incoming
-    .map(clean_classification_entry)
-    .filter((e) => e !== null);
-  if (fresh.length === 0) return;
-
-  let doc = await QuestionClassifications.findOne({
-    subject_id: String(The_Exam._id),
-  });
-  if (!doc) {
-    doc = new QuestionClassifications({
-      subject_id: String(The_Exam._id),
-      questions: [],
-    });
-  }
-
-  const fresh_keys = new Set(
-    fresh.map((e) => `${e.classification}::${e.question}`),
-  );
-  const kept_history = (doc.questions || []).filter(
-    (e) =>
-      (e.classification === "needs_edit" || e.classification === "rejected") &&
-      !fresh_keys.has(`${e.classification}::${e.question}`),
-  );
-
-  doc.subject_name = The_Exam.name || "";
-  doc.questions = [...fresh, ...kept_history];
-  doc.updated_at = new Date();
-  await doc.save();
-};
 
 /**
  * @param {import('express').Request} req
@@ -86,9 +24,8 @@ export const Update_Exam = async (req, res) => {
       new_available_to,
       new_open_mode,
       new_price,
+      new_price_moadal,
       new_summary,
-      // تصنيفات جلسة التعديل (اختياري) — تُخزَّن في كولكشن مستقل
-      new_classifications,
       // ─── حقول مسار العضو ───
       employee, // true إذا كان الحفظ صادراً من تطبيق العضو
       employer_id, // _id العضو
@@ -118,8 +55,14 @@ export const Update_Exam = async (req, res) => {
 
       // أبقِ كل معلومات المادة كما هي، وغيّر الأسئلة فقط
       The_Exam.questions = new_questions;
+      // تغيّرت الأسئلة → قد تنكسر أهلية معدل (أو تكتمل)
+      const eligibility = recomputeMoadalAvailability(The_Exam);
+      if (eligibility.changed) {
+        console.log(
+          `[معدل] ${The_Exam.name}: الأهلية ${eligibility.was} → ${eligibility.now} (تعديل عضو)`,
+        );
+      }
       await The_Exam.save();
-      await upsert_question_classifications(The_Exam, new_classifications);
 
       // أضف معلومات الجلسة لسجل العضو
       const employer = await Employers.findById(employer_id);
@@ -136,6 +79,11 @@ export const Update_Exam = async (req, res) => {
       return res.status(200).json({ message: "تم حفظ تعديلات الأسئلة" });
     }
 
+    // حقل المشتركين وحده كان يفلت من حارس «الغياب ≠ الحذف»: القيمة تُطبَّع
+    // إلى [] قبل الفحص، فتصبح `[] !== undefined` صحيحة دائماً ويُسند المصفوفة
+    // الفارغة فوق المشتركين. حمولةٌ لا تذكر المشتركين كانت تمحوهم جميعاً.
+    const has_available = new_available_to !== undefined;
+
     const clean_new_available_to = Array.isArray(new_available_to)
       ? new_available_to.filter(
           (x) => x !== null && x !== undefined && x !== "",
@@ -148,10 +96,10 @@ export const Update_Exam = async (req, res) => {
 
     // حساب عدد الطلاب قبل وبعد
     const old_count = clean_old_available_to.length;
-    const new_count = clean_new_available_to.length;
+    const new_count = has_available ? clean_new_available_to.length : old_count;
 
-    // حساب الفرق
-    const difference = new_count - old_count;
+    // حساب الفرق — صفر حين لا تُذكر القائمة أصلاً
+    const difference = has_available ? new_count - old_count : 0;
 
     let profit_to_add = 0;
     if (difference > 0) {
@@ -168,15 +116,24 @@ export const Update_Exam = async (req, res) => {
     admin.total_profit += profit_to_add;
     await admin.save();
 
-    // تحديث بيانات المادة
-    The_Exam.name = new_name;
-    The_Exam.info = new_info;
-    The_Exam.questions = new_questions;
-    The_Exam.time = new_time;
-    The_Exam.visible = new_visible;
-    The_Exam.available_to = clean_new_available_to;
-    The_Exam.open_mode = new_open_mode;
-    The_Exam.price = new_price;
+    // تحديث بيانات المادة.
+    // الإسناد مشروط بالوصول: حمولة ناقصة (لأي سبب — جلب تدريجي، انقطاع،
+    // عميل قديم) كانت تكتب undefined فوق حقول سليمة، فتمحو الأسئلة
+    // والمشتركين بلا إنذار. الغياب يعني «لا تلمس» لا «احذف».
+    const setIf = (key, value) => {
+      if (value !== undefined) The_Exam[key] = value;
+    };
+    setIf("name", new_name);
+    setIf("info", new_info);
+    setIf("questions", new_questions);
+    setIf("time", new_time);
+    setIf("visible", new_visible);
+    if (has_available) The_Exam.available_to = clean_new_available_to;
+    setIf("open_mode", new_open_mode);
+    setIf("price", new_price);
+    if (new_price_moadal !== undefined) {
+      The_Exam.price_moadal = Number(new_price_moadal) || 0;
+    }
     // قبل The_Exam.save()
     console.log("new_summary received:", JSON.stringify(new_summary, null, 2));
     console.log("summary length:", new_summary?.length);
@@ -184,8 +141,16 @@ export const Update_Exam = async (req, res) => {
       The_Exam.summary = new_summary;
     }
 
+    // إعادة حساب أهلية «معدل» بعد أي تعديل على الأسئلة أو الملخص —
+    // وإلا بقيت المادة معلَّمة مؤهلة زوراً بعد حذف محتوى تعتمد عليه.
+    const eligibility = recomputeMoadalAvailability(The_Exam);
+    if (eligibility.changed) {
+      console.log(
+        `[معدل] ${The_Exam.name}: الأهلية ${eligibility.was} → ${eligibility.now}`,
+      );
+    }
+
     await The_Exam.save();
-    await upsert_question_classifications(The_Exam, new_classifications);
 
     res.status(200).json({
       message: "تم تحديث بيانات المادة",

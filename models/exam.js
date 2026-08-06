@@ -72,8 +72,54 @@ const SummarySchema = new mongoose.Schema(
   {
     meta: {
       lecture_title: { type: String, required: false, default: "" }, // ← شيل required
+      lecture_id: { type: String, required: false, default: "" }, // ربط بكيان المحاضرة
     },
     sections: [SectionSchema],
+  },
+  { _id: false },
+);
+
+// ─── Lecture Entity Sub-Schemas ────────────────────────────────────────────────
+// كيان المحاضرة الموحّد: يربط نص المقرر والملخص والأسئلة والفلاش كاردز
+// والاختبار التحريري تحت هوية واحدة (lecture_id) — أساس خطة «معدل».
+
+const FlashCardSchema = new mongoose.Schema(
+  {
+    card_id: { type: String, required: true },
+    front: { type: String, required: false, default: "" },
+    back: { type: String, required: false, default: "" },
+  },
+  { _id: false },
+);
+
+// سؤال الاختبار التحريري: الجواب النموذجي يُخزَّن هنا لوكيل التصحيح فقط
+// ولا يُرسَل إلى تطبيق الطالب أبداً.
+const WrittenQuestionSchema = new mongoose.Schema(
+  {
+    q_id: { type: String, required: true },
+    question: { type: String, required: false, default: "" },
+    model_answer: { type: String, required: false, default: "" },
+  },
+  { _id: false },
+);
+
+const LectureSchema = new mongoose.Schema(
+  {
+    lecture_id: { type: String, required: true },
+    title: { type: String, required: false, default: "" },
+    order: { type: Number, required: false, default: 0 },
+    // rel_path لوثيقة النص في كولكشن LectureText ("" = لا نص مربوط)
+    text_ref: { type: String, required: false, default: "" },
+    // اسم مجموعة الأسئلة المربوطة (حقل lecture النصي في questions[])
+    questions_lecture_name: { type: String, required: false, default: "" },
+    // تُحسَب في السيرفر عند الحفظ — أساس تقدير أزمنة الخطة الدراسية
+    word_count_text: { type: Number, required: false, default: 0 },
+    word_count_summary: { type: Number, required: false, default: 0 },
+    flash_cards: { type: [FlashCardSchema], default: [] },
+    written_exam: {
+      duration_min: { type: Number, required: false, default: 30 },
+      questions: { type: [WrittenQuestionSchema], default: [] },
+    },
   },
   { _id: false },
 );
@@ -88,6 +134,8 @@ const SUBJECTS_SCHEMA = mongoose.Schema({
   time: { type: Number, required: true },
   visible: { type: Boolean, default: false },
   available_to: { type: Array, default: [] },
+  // مشتركو خطة «معدل» (يملكون أيضاً كل ما في «ترفيع» — موجودون في available_to كذلك)
+  available_to_moadal: { type: Array, default: [] },
   open_mode: { type: Boolean, default: false },
   price: { type: Number, default: 0 },
   admin_id: {
@@ -110,10 +158,17 @@ const SUBJECTS_SCHEMA = mongoose.Schema({
         options: { type: [String], required: true },
         answer: { type: String, required: true },
         lecture: { type: String, required: false, default: "" },
+        lecture_id: { type: String, required: false, default: "" },
       },
     ],
   },
   summary: { type: [SummarySchema], required: false, default: null },
+  // ─── كيان المحاضرة وخطة «معدل» ───
+  lectures: { type: [LectureSchema], default: [] },
+  // سعر خطة «معدل» (price الحالي = سعر خطة «ترفيع»)
+  price_moadal: { type: Number, required: false, default: 0 },
+  // مشتق آلياً عند حفظ المحاضرات: كل محاضرة مكتملة الأنواع الخمسة
+  moadal_available: { type: Boolean, required: false, default: false },
 });
 
 export default mongoose.model("Subjects", SUBJECTS_SCHEMA);

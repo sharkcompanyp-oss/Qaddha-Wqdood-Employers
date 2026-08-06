@@ -1,0 +1,183 @@
+import dotenv from "dotenv";
+
+dotenv.config();
+
+// ─── التدقيق الإملائي عبر Gemini ──────────────────────────────────────────────
+// المفتاح يبقى في الخادم (بخلاف مفتاح Mistral الذي يتجدّد كل ساعة): مفتاح
+// Gemini ثابت وحصّته يومية، وتسريبه يستهلكها غيرُك.
+//
+// الخادم يستدعي النموذج ويعيد التصحيحات **خاماً**. الترشيح يجري في الواجهة
+// حتى ترى ما رُفض ولماذا، وتستطيع نقض الرفض إن كنت أدرى — الشفافية هنا
+// أهمّ من الاختصار لأن المستخدم يراجع كل كلمة قبل التطبيق.
+
+const GEMINI = "https://generativelanguage.googleapis.com/v1beta";
+
+// الموجّه منقول حرفياً عن spellcheck.py — كل جملة فيه ثمنُ خطأٍ وقع سابقاً
+const PROMPT = `أنت مدقق إملائي للغة العربية. مهمتك الوحيدة تصحيح أخطاء الإملاء
+الناتجة عن المسح الضوئي (OCR) في نص محاضرة طبية.
+
+افعل فقط:
+- تصحيح حرف مرسوم خطأ (مثل: تمدن ← تمعدن، ليفية ← كيفية).
+- تصحيح الهمزات والتاء المربوطة/المفتوحة والألف المقصورة.
+- فصل كلمتين التصقتا، أو وصل كلمة انقسمت خطأً.
+
+ممنوع منعاً باتاً:
+- تغيير أي معلومة أو حقيقة أو رقم أو نسبة أو تاريخ.
+- تغيير أي مصطلح علمي أو طبي أو اسم لاتيني، حتى لو بدا غريباً.
+- إعادة صياغة أي جملة أو تحسين أسلوبها.
+- حذف أو إضافة أي كلمة تحمل معنى.
+- التعليق على صحة المحتوى العلمي أو التشكيك فيه.
+
+إن لم تكن واثقاً 100% أن الكلمة خطأ إملائي، فاتركها. الترك أأمن من التغيير.
+
+أعد JSON فقط بهذا الشكل، بلا أي نص آخر:
+{"corrections":[{"line":<رقم السطر كما هو معطى>,"before":"<الكلمة الخطأ>","after":"<الكلمة الصحيحة>"}]}
+إن لم تجد أخطاء أعد: {"corrections":[]}
+
+النص (كل سطر مسبوق برقمه):
+`;
+
+const guard = (req, res) => {
+  const { PASSWORD } = req.body || {};
+  if (!PASSWORD || PASSWORD !== process.env.PASSWORD) {
+    res.status(401).json({ message: "غير مصرّح" });
+    return false;
+  }
+  return true;
+};
+
+const defaultModel = () =>
+  process.env.GEMINI_MODEL_SPELL ||
+  process.env.GEMINI_MODEL ||
+  "gemini-3.5-flash-lite";
+
+/** النماذج المتاحة لهذا المفتاح — القائمة تُبنى من الحساب لا من قائمة
+ *  مكتوبة يدوياً تتقادم. */
+export const Gemini_Models = async (req, res) => {
+  try {
+    if (!guard(req, res)) return;
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) {
+      return res
+        .status(200)
+        .json({ ready: false, models: [], current: defaultModel() });
+    }
+    const r = await fetch(`${GEMINI}/models?key=${key}&pageSize=100`);
+    if (!r.ok) {
+      return res.status(200).json({
+        ready: true,
+        models: [],
+        current: defaultModel(),
+        note: `تعذّر جلب القائمة (${r.status})`,
+      });
+    }
+    const data = await r.json();
+    const models = (data.models || [])
+      .filter((m) =>
+        (m.supportedGenerationMethods || []).includes("generateContent"),
+      )
+      .map((m) => String(m.name).replace(/^models\//, ""))
+      .filter((n) => /gemini/i.test(n))
+      .sort();
+    return res
+      .status(200)
+      .json({ ready: true, models, current: defaultModel() });
+  } catch (error) {
+    return res.status(200).json({
+      ready: false,
+      models: [],
+      current: defaultModel(),
+      note: error.message,
+    });
+  }
+};
+
+/** يستخرج JSON من رد النموذج — أحياناً يلفّه بسياج ماركداون رغم التعليمات */
+const extractJson = (text) => {
+  if (!text) return null;
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const body = fenced ? fenced[1] : text;
+  const start = body.indexOf("{");
+  const end = body.lastIndexOf("}");
+  if (start === -1 || end === -1 || end < start) return null;
+  try {
+    return JSON.parse(body.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+};
+
+/** يدقّق قطعةً واحدة (أسطر مرقّمة). التقطيع في الواجهة لأنها تعرف
+ *  التقدّم وتديره؛ الخادم يخدم طلباً واحداً في كل مرة. */
+export const Spellcheck_Chunk = async (req, res) => {
+  try {
+    if (!guard(req, res)) return;
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) {
+      return res
+        .status(503)
+        .json({ message: "GEMINI_API_KEY غير مضبوط في الخادم" });
+    }
+    const { text, model } = req.body;
+    if (!text || !String(text).trim()) {
+      return res.status(200).json({ corrections: [] });
+    }
+
+    const use = String(model || defaultModel()).replace(/^models\//, "");
+    const r = await fetch(
+      `${GEMINI}/models/${use}:generateContent?key=${key}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: PROMPT + text }] }],
+          generationConfig: {
+            // حرارة صفر: التدقيق ليس موضع إبداع
+            temperature: 0,
+            responseMimeType: "application/json",
+          },
+        }),
+      },
+    );
+
+    const raw = await r.text();
+    if (!r.ok) {
+      // 429 يعني تجاوز الحصة — نمرّر المهلة المقترحة لتنتظرها الواجهة
+      let retryAfter = null;
+      const m = raw.match(/"retryDelay"\s*:\s*"(\d+)s"/);
+      if (m) retryAfter = Number(m[1]) + 2;
+      return res.status(r.status).json({
+        message:
+          r.status === 429
+            ? "تجاوزتَ حصة الطلبات — انتظر ثم أعد"
+            : `فشل التدقيق (${r.status})`,
+        retryAfter,
+        detail: raw.slice(0, 300),
+      });
+    }
+
+    const data = JSON.parse(raw);
+    const out = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const parsed = extractJson(out);
+    if (!parsed) {
+      return res
+        .status(200)
+        .json({ corrections: [], note: "رد غير مفهوم — عُدّت القطعة سليمة" });
+    }
+    const corrections = (parsed.corrections || [])
+      .filter((c) => c && c.before && c.after)
+      .map((c) => ({
+        line: Number(c.line),
+        before: String(c.before),
+        after: String(c.after),
+      }))
+      .filter((c) => Number.isFinite(c.line));
+
+    return res.status(200).json({ corrections, model: use });
+  } catch (error) {
+    console.error("Spellcheck_Chunk:", error.message);
+    return res
+      .status(502)
+      .json({ message: "تعذّر الاتصال بـGemini", error: error.message });
+  }
+};

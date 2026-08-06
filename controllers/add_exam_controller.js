@@ -14,6 +14,7 @@ export const Add_Exam = async (req, res) => {
       time,
       visible,
       price,
+      price_moadal,
       admin_id,
       summary,
     } = req.body;
@@ -54,6 +55,7 @@ export const Add_Exam = async (req, res) => {
       available_to: [],
       open_mode: true,
       price: price || 0,
+      price_moadal: price_moadal || 0,
       admin_id: admin_id || null,
       summary: summary || null,
     });
