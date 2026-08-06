@@ -20,6 +20,12 @@ dotenv.config();
 
 const GEMINI = "https://generativelanguage.googleapis.com/v1beta";
 
+// رفع الملفات له مضيفٌ بمسارٍ مختلف: /upload/v1beta/files.
+// أما /v1beta/files فمسار السرد والقراءة، ولا يفهم بروتوكول الرفع
+// القابل للاستئناف — يردّ بلا ترويسة x-goog-upload-url، فيبدو العطل
+// «تعذّر بدء الرفع» بلا سبب ظاهر.
+const GEMINI_UPLOAD = "https://generativelanguage.googleapis.com/upload/v1beta";
+
 const DEFAULT_PROMPT = `فرّغ هذا التسجيل الصوتي إلى نصّ عربي مكتوب بدقة عالية، وأخرجه بصيغة ماركداون.
 
 التعليمات:
@@ -96,7 +102,7 @@ export const Transcribe_Start = async (req, res) => {
       return res.status(400).json({ message: "حجم الملف ناقص" });
     }
 
-    const r = await fetch(`${GEMINI}/files?key=${key}`, {
+    const r = await fetch(`${GEMINI_UPLOAD}/files?key=${key}`, {
       method: "POST",
       headers: {
         "X-Goog-Upload-Protocol": "resumable",
@@ -110,10 +116,13 @@ export const Transcribe_Start = async (req, res) => {
 
     const uploadUrl = r.headers.get("x-goog-upload-url");
     if (!uploadUrl) {
+      // نمرّر ردّ Google كما هو: «تعذّر بدء الرفع» وحدها لا تُصلح شيئاً،
+      // ونصّ الردّ يقول أهو مفتاح خاطئ أم حصة نفدت أم مسار غلط.
       const t = await r.text();
-      return res
-        .status(502)
-        .json({ message: "تعذّر بدء الرفع", detail: t.slice(0, 300) });
+      return res.status(502).json({
+        message: `تعذّر بدء الرفع (${r.status})`,
+        detail: t.slice(0, 400),
+      });
     }
     return res.status(200).json({ uploadUrl });
   } catch (error) {
