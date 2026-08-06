@@ -29,7 +29,6 @@ import {
 import { Generate_Items } from "../controllers/generate_controller.js";
 import {
   Transcribe_Models,
-  Transcribe_Start,
   Transcribe_Status,
   Transcribe_Run,
   Transcribe_Cleanup,
@@ -106,10 +105,8 @@ router.post("/production/mistral-ocr", Mistral_Ocr);
 router.post("/production/gemini-models", Gemini_Models);
 router.post("/production/spellcheck", Spellcheck_Chunk);
 router.post("/production/generate", bigBody, Generate_Items);
-// تفريغ الصوت: البايتات تذهب من المتصفّح إلى Google مباشرةً، فلا يمرّ
-// بخادمنا إلا أجسامٌ صغيرة (روابط وأسماء) — لا حاجة للحدّ الأوسع.
+// تفريغ الصوت — مسار الرفع مُركَّب في server.js قبل مُحلِّلات الجسم
 router.post("/production/transcribe-models", Transcribe_Models);
-router.post("/production/transcribe-start", Transcribe_Start);
 router.post("/production/transcribe-status", Transcribe_Status);
 router.post("/production/transcribe-run", Transcribe_Run);
 router.post("/production/transcribe-cleanup", Transcribe_Cleanup);

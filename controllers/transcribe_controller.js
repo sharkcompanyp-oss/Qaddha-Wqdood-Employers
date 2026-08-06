@@ -11,12 +11,15 @@ dotenv.config();
 //       base64، و~198م.ب في ذاكرة Render التي سعتها 512م.ب → انهيار (502)،
 //       والرفع نفسه عبر شبكةٍ بطيئة → Network Error.
 //
-// لذلك: **الملف لا يمرّ بخادمنا إطلاقاً**. الخادم يطلب من Google رابط رفعٍ
-// قابلاً للاستئناف (بمفتاحه السرّي)، ويسلّمه للمتصفّح، فيرفع المتصفّح
-// البايتات إلى Google مباشرةً. الرابط نفسه هو التصريح، فلا يتسرّب المفتاح.
+// جرّبنا الرفع المباشر من المتصفّح إلى Google، وفشل: **Google لا يرسل أي
+// ترويسة CORS على رابط الرفع** (تحقّقنا: access-control-allow-origin غائبة
+// تماماً)، فالمتصفّح يمنعه حتماً مهما كانت الشبكة.
 //
-// النتيجة: صفر بايت صوت على خادمنا، وصفر base64، ولا حدّ لحجم الملف
-// سوى حدّ Google (2 غ.ب).
+// فالملف يمرّ بخادمنا اضطراراً — لكن **مجرىً لا حِملاً**:
+//   • بلا base64: البايتات خامٌ كما هي (توفير 33% من الحجم).
+//   • بلا تجميع في الذاكرة: نُمرّر مجرى الطلب إلى Google مباشرةً، فتبقى
+//     الذاكرة ثابتة مهما كبر الملف بدل ~198م.ب لتسجيل ساعة.
+// وهذا ما يجعل تسجيل الساعة يمرّ على خادمٍ سعته 512م.ب.
 
 const GEMINI = "https://generativelanguage.googleapis.com/v1beta";
 
@@ -89,16 +92,27 @@ export const Transcribe_Models = async (req, res) => {
   }
 };
 
-/** ١) يطلب رابط رفعٍ قابلاً للاستئناف ويسلّمه للمتصفّح.
- *  المفتاح يُستعمل هنا ولا يُرسَل: الرابط العائد يحمل تصريحه في ذاته. */
-export const Transcribe_Start = async (req, res) => {
+/** يرفع الملف إلى Google بتمرير مجرى الطلب مباشرةً.
+ *  البايتات تصل خاماً في جسم الطلب (Content-Type = نوع الصوت)، والمعطيات
+ *  في الترويسات — فلا JSON ولا base64 ولا تجميع في الذاكرة. */
+export const Transcribe_Upload = async (req, res) => {
   try {
-    if (!guard(req, res)) return;
+    // الحارس من الترويسة لا من الجسم: الجسم هنا بايتات صوت لا JSON
+    if (
+      !req.headers["x-panel-password"] ||
+      req.headers["x-panel-password"] !== process.env.PASSWORD
+    ) {
+      return res.status(401).json({ message: "غير مصرّح" });
+    }
     const key = keyOr503(res);
     if (!key) return;
 
-    const { mimeType, sizeBytes, displayName } = req.body;
-    if (!sizeBytes || Number(sizeBytes) <= 0) {
+    const mimeType = req.headers["x-audio-mime"] || "audio/mpeg";
+    const sizeBytes = Number(req.headers["content-length"] || 0);
+    const displayName = decodeURIComponent(
+      String(req.headers["x-audio-name"] || "audio"),
+    );
+    if (!sizeBytes) {
       return res.status(400).json({ message: "حجم الملف ناقص" });
     }
 
@@ -124,10 +138,39 @@ export const Transcribe_Start = async (req, res) => {
         detail: t.slice(0, 400),
       });
     }
-    return res.status(200).json({ uploadUrl });
+
+    // المجرى يُمرَّر كما هو: لا req.body ولا Buffer.concat — الذاكرة ثابتة
+    const up = await fetch(uploadUrl, {
+      method: "POST",
+      headers: {
+        "Content-Length": String(sizeBytes),
+        "X-Goog-Upload-Offset": "0",
+        "X-Goog-Upload-Command": "upload, finalize",
+      },
+      body: req,
+      duplex: "half", // إلزامي في Node عند إرسال مجرى
+    });
+
+    const text = await up.text();
+    if (!up.ok) {
+      return res.status(502).json({
+        message: `فشل رفع الملف (${up.status})`,
+        detail: text.slice(0, 400),
+      });
+    }
+    const info = JSON.parse(text);
+    const file = info?.file || info;
+    return res.status(200).json({
+      fileName: file?.name,
+      uri: file?.uri,
+      state: file?.state,
+      mimeType,
+    });
   } catch (error) {
-    console.error("Transcribe_Start:", error.message);
-    return res.status(502).json({ message: "تعذّر الاتصال بـGemini", error: error.message });
+    console.error("Transcribe_Upload:", error.message);
+    return res
+      .status(502)
+      .json({ message: "تعذّر رفع الملف", error: error.message });
   }
 };
 
