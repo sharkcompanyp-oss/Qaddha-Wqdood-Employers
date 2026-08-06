@@ -2,57 +2,67 @@ import Subjects from "../models/exam.js";
 import Students from "../models/student.js";
 import Admins from "../models/admin.js";
 
-/**
- * @param {import('express').Request} req
- * @param {import('express').Response} res
- */
+// ─── الإحصائيات ───────────────────────────────────────────────────────────────
+// كانت ثلاثة find() بلا حدود: تُنزل **كل** وثيقة كاملةً — بأسئلتها وملخصاتها
+// ومحاضراتها ونصوصها — ثم لا تستعمل منها إلا ستة حقول عددية.
+// المادة الواحدة ~294 ك.ب، فمئة مادة تعني ~29 م.ب على السلك في كل فتحة للشاشة.
+//
+// الآن: العدّ يحدث في القاعدة ($size لا نقل المصفوفة)، والطلاب والأدمن
+// يُعدّون بـcountDocuments بلا نقل وثيقة واحدة.
+
 export const Get_Analytics = async (req, res) => {
   try {
-    const All_Exams = await Subjects.find();
-    const All_Students = await Students.find();
-    const All_Admins = await Admins.find();
+    // ثلاثتها مستقلّة، فتُنفَّذ معاً لا بالتتابع
+    const [rows, total_students, total_admins] = await Promise.all([
+      Subjects.aggregate([
+        {
+          $project: {
+            _id: 0,
+            subject_id: "$ID",
+            subject_name: "$name",
+            college_id: 1,
+            price: { $ifNull: ["$price", 0] },
+            enrolled_students: { $size: { $ifNull: ["$available_to", []] } },
+            free: { $ifNull: ["$number_of_free_subscriptions", 0] },
+          },
+        },
+        {
+          // الربح = (المشتركون − المجانيون) × السعر، ولا يقلّ عن صفر:
+          // المجانيون قد يتجاوزون المشتركين في مادة تجريبية فيخرج رقم سالب
+          // يُنقص الإجمالي بلا معنى.
+          $addFields: {
+            total_profit: {
+              $multiply: [
+                { $max: [0, { $subtract: ["$enrolled_students", "$free"] }] },
+                "$price",
+              ],
+            },
+          },
+        },
+        { $project: { free: 0 } },
+        { $sort: { total_profit: -1 } },
+      ]),
+      Students.estimatedDocumentCount(),
+      Admins.estimatedDocumentCount(),
+    ]);
 
-    // ==================== ربحية كل مادة ====================
-    const profitPerSubject = All_Exams.map((subject) => {
-      const studentsCount = subject.available_to?.length || 0;
-      const freeSubscriptions = subject.number_of_free_subscriptions || 0;
-      const price = subject.price || 0;
+    const totalProfit = rows.reduce((s, r) => s + (r.total_profit || 0), 0);
 
-      const paidStudents = studentsCount - freeSubscriptions;
-      const totalProfit = paidStudents * price;
-
-      return {
-        subject_id: subject.ID,
-        subject_name: subject.name,
-        college_id: subject.college_id, // ✅ أضفناها هنا
-        price: price,
-        enrolled_students: studentsCount,
-        total_profit: totalProfit,
-      };
-    });
-
-    // ==================== إجمالي الإحصائيات ====================
-    const totalProfit = profitPerSubject.reduce(
-      (sum, item) => sum + item.total_profit,
-      0,
-    );
-
-    // ==================== الاستجابة ====================
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       analytics: {
         general: {
-          total_students: All_Students.length,
-          total_exams: All_Exams.length,
-          total_admins: All_Admins.length,
+          total_students,
+          total_exams: rows.length,
+          total_admins,
           total_profit: totalProfit,
         },
-        profit_per_subject: profitPerSubject,
+        profit_per_subject: rows,
       },
     });
   } catch (error) {
     console.error("خطأ في تحليل البيانات:", error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "حدث خطأ، تحقق من اتصالك بالإنترنت",
       error: error.message,
