@@ -27,6 +27,10 @@ import {
   Spellcheck_Chunk,
 } from "../controllers/spellcheck_controller.js";
 import { Generate_Items } from "../controllers/generate_controller.js";
+import {
+  Transcribe_Audio,
+  Transcribe_Models,
+} from "../controllers/transcribe_controller.js";
 import { Add_Student_To_Exam } from "../controllers/Add_Student_To_Exam_Controller.js";
 import { Get_Requests } from "../controllers/get_requests_controller.js";
 import { Reject_Request } from "../controllers/reject_request_controller.js";
@@ -99,6 +103,9 @@ router.post("/production/mistral-ocr", Mistral_Ocr);
 router.post("/production/gemini-models", Gemini_Models);
 router.post("/production/spellcheck", Spellcheck_Chunk);
 router.post("/production/generate", bigBody, Generate_Items);
+// تفريغ الصوت — الملفات الصوتية ضخمة فتحتاج الحدّ الأوسع
+router.post("/production/transcribe-models", Transcribe_Models);
+router.post("/production/transcribe", bigBody, Transcribe_Audio);
 router.post("/addstudenttoexam", Add_Student_To_Exam);
 router.post("/getrequests", Get_Requests);
 router.delete("/rejectrequest", Reject_Request);
