@@ -38,7 +38,7 @@ const pickLight = (doc) => {
 // ملخص محاضرة بعينها + فهرسه. الفهرس هو مفتاح الحفظ الجزئي:
 // عناصر الملخص بلا _id، فهويتها موضعها في المصفوفة.
 const summaryFor = (doc, lectureId, lectureTitle) => {
-  const arr = doc.summary || [];
+  const arr = Array.isArray(doc.summary) ? doc.summary : [];
   const i = arr.findIndex(
     (s) =>
       (s?.meta?.lecture_id && s.meta.lecture_id === lectureId) ||
@@ -51,7 +51,7 @@ const summaryFor = (doc, lectureId, lectureTitle) => {
 // الموضع في المصفوفة الكاملة حتى لا تُزحزح أسئلة محاضرات أخرى.
 const questionsFor = (doc, lectureId, groupName) => {
   const out = [];
-  (doc.questions || []).forEach((q, index) => {
+  (Array.isArray(doc.questions) ? doc.questions : []).forEach((q, index) => {
     const byId = lectureId && q.lecture_id === lectureId;
     const byName = groupName && q.lecture === groupName;
     if (byId || byName) out.push({ index, question: q });
@@ -78,9 +78,9 @@ export const Get_One_Subject = async (req, res) => {
     if (scope === "meta") {
       return res.status(200).json({
         ...pickLight(doc),
-        questions_count: (doc.questions || []).length,
-        summary_count: (doc.summary || []).length,
-        lectures_count: (doc.lectures || []).length,
+        questions_count: (Array.isArray(doc.questions) ? doc.questions : []).length,
+        summary_count: (Array.isArray(doc.summary) ? doc.summary : []).length,
+        lectures_count: (Array.isArray(doc.lectures) ? doc.lectures : []).length,
       });
     }
 
@@ -113,20 +113,20 @@ export const Get_One_Subject = async (req, res) => {
             title: l.title,
             order: l.order,
             has_text: Boolean((l.text_ref || "").trim()),
-            has_summary: (doc.summary || []).some(
+            has_summary: (Array.isArray(doc.summary) ? doc.summary : []).some(
               (s) => s?.meta?.lecture_id === l.lecture_id,
             ),
-            questions_count: (doc.questions || []).filter(
+            questions_count: (Array.isArray(doc.questions) ? doc.questions : []).filter(
               (q) => q.lecture_id === l.lecture_id,
             ).length,
-            flash_count: (l.flash_cards || []).length,
+            flash_count: (Array.isArray(l.flash_cards) ? l.flash_cards : []).length,
             written_count: (l.written_exam?.questions || []).length,
           })),
       });
     }
 
     if (scope === "lecture" || scope === "part") {
-      const lecture = (doc.lectures || []).find(
+      const lecture = (Array.isArray(doc.lectures) ? doc.lectures : []).find(
         (l) => l.lecture_id === lecture_id,
       );
       if (!lecture) {
@@ -139,7 +139,7 @@ export const Get_One_Subject = async (req, res) => {
         name: doc.name,
         // حارس التزامن للحفظ الجزئي: يقارنه الخادم عند الكتابة، فإن تغيّر
         // العدد بيننا فقد عدّل أحدٌ المادة والكتابة تدهس عمله.
-        total_questions: (doc.questions || []).length,
+        total_questions: (Array.isArray(doc.questions) ? doc.questions : []).length,
         lecture: {
           lecture_id: lecture.lecture_id,
           title: lecture.title,
@@ -162,7 +162,7 @@ export const Get_One_Subject = async (req, res) => {
           lecture.questions_lecture_name,
         );
       }
-      if (wants("flash")) payload.flash_cards = lecture.flash_cards || [];
+      if (wants("flash")) payload.flash_cards = Array.isArray(lecture.flash_cards) ? lecture.flash_cards : [];
       if (wants("written")) {
         payload.written_exam = lecture.written_exam || {
           duration_min: 30,

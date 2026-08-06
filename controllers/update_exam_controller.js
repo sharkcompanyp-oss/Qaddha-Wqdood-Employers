@@ -99,7 +99,7 @@ export const Update_Exam = async (req, res) => {
         )
       : [];
 
-    const clean_old_available_to = (The_Exam.available_to || []).filter(
+    const clean_old_available_to = (Array.isArray(The_Exam.available_to) ? The_Exam.available_to : []).filter(
       (x) => x !== null && x !== undefined && x !== "",
     );
 

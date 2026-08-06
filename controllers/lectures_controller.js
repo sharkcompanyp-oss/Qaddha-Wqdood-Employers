@@ -237,7 +237,7 @@ export const Update_Lectures = async (req, res) => {
       }
     });
     const questionsByName = new Map(); // اسم المجموعة -> عدد الأسئلة
-    (The_Exam.questions || []).forEach((q) => {
+    (Array.isArray(The_Exam.questions) ? The_Exam.questions : []).forEach((q) => {
       const name = (q.lecture || "").trim();
       q.lecture_id = name && nameToLectureId.has(name)
         ? nameToLectureId.get(name)

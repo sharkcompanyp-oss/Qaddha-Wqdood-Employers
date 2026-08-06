@@ -29,7 +29,7 @@ const guard = (req, res) => {
  *  ما يراه المحرّر عمّا يعرفه الحافظ. */
 const ownedQuestionIndices = (doc, lectureId, groupName) => {
   const out = [];
-  (doc.questions || []).forEach((q, i) => {
+  (Array.isArray(doc.questions) ? doc.questions : []).forEach((q, i) => {
     const byId = lectureId && q.lecture_id === lectureId;
     const byName = groupName && q.lecture === groupName;
     if (byId || byName) out.push(i);
@@ -51,7 +51,7 @@ export const Save_Part = async (req, res) => {
     const exam = await Exams.findById(_id);
     if (!exam) return res.status(404).json({ message: "المادة غير موجودة" });
 
-    const lecture = (exam.lectures || []).find(
+    const lecture = (Array.isArray(exam.lectures) ? exam.lectures : []).find(
       (l) => l.lecture_id === lecture_id,
     );
     if (!lecture) {
@@ -79,7 +79,7 @@ export const Save_Part = async (req, res) => {
     if (wants("summary") && payload.summary !== undefined) {
       if (payload.summary === null) {
         // حذف صريح: يُطلب بـ null لا بالغياب
-        const arr = exam.summary || [];
+        const arr = Array.isArray(exam.summary) ? exam.summary : [];
         const i = arr.findIndex((s) => s?.meta?.lecture_id === lecture_id);
         if (i >= 0) {
           arr.splice(i, 1);
@@ -95,7 +95,7 @@ export const Save_Part = async (req, res) => {
           lecture_id,
           lecture_title: incoming.meta?.lecture_title || lecture.title || "",
         };
-        const arr = exam.summary || [];
+        const arr = Array.isArray(exam.summary) ? exam.summary : [];
         const i = arr.findIndex(
           (s) =>
             s?.meta?.lecture_id === lecture_id ||
@@ -126,7 +126,7 @@ export const Save_Part = async (req, res) => {
       if (!groupName) {
         const title = (lecture.title || "").trim();
         const ownedSet0 = new Set(owned);
-        const strangersUnderTitle = (exam.questions || []).some(
+        const strangersUnderTitle = (Array.isArray(exam.questions) ? exam.questions : []).some(
           (q, i) => !ownedSet0.has(i) && (q.lecture || "").trim() === title,
         );
         if (!title || strangersUnderTitle) {
@@ -145,13 +145,13 @@ export const Save_Part = async (req, res) => {
       // يعني أن أحداً عدّل المادة بيننا، والكتابة عندها تدهس عمله.
       if (
         payload.total_at_fetch !== undefined &&
-        Number(payload.total_at_fetch) !== (exam.questions || []).length
+        Number(payload.total_at_fetch) !== (Array.isArray(exam.questions) ? exam.questions : []).length
       ) {
         return res.status(409).json({
           message:
             "تغيّرت أسئلة المادة أثناء تعديلك. أعد فتح المحاضرة لتحديث نسختك ثم احفظ.",
           expected: Number(payload.total_at_fetch),
-          actual: (exam.questions || []).length,
+          actual: (Array.isArray(exam.questions) ? exam.questions : []).length,
         });
       }
 
@@ -171,7 +171,7 @@ export const Save_Part = async (req, res) => {
           lecture_id,
         }));
 
-      const all = (exam.questions || []).map((q) =>
+      const all = (Array.isArray(exam.questions) ? exam.questions : []).map((q) =>
         q.toObject ? q.toObject() : q,
       );
       const at = owned.length ? owned[0] : all.length;
@@ -196,7 +196,7 @@ export const Save_Part = async (req, res) => {
           front: String(c.front || ""),
           back: String(c.back || ""),
         }));
-      changed.push(`flash:${(lecture.flash_cards || []).length}`);
+      changed.push(`flash:${(Array.isArray(lecture.flash_cards) ? lecture.flash_cards : []).length}`);
     }
 
     // ─── الاختبار التحريري ────────────────────────────────────────────────────
@@ -212,7 +212,7 @@ export const Save_Part = async (req, res) => {
             model_answer: String(q.model_answer || ""),
           })),
       };
-      changed.push(`written:${(lecture.written_exam.questions || []).length}`);
+      changed.push(`written:${(Array.isArray(lecture.written_exam.questions) ? lecture.written_exam.questions : []).length}`);
     }
 
     // ─── ربط نص المقرر ────────────────────────────────────────────────────────
@@ -247,7 +247,7 @@ export const Save_Part = async (req, res) => {
       lecture_id,
       moadal_available: exam.moadal_available,
       // العميل يحدّث حارس التزامن بلا إعادة جلب
-      total_questions: (exam.questions || []).length,
+      total_questions: (Array.isArray(exam.questions) ? exam.questions : []).length,
     });
   } catch (error) {
     console.error("Save_Part:", error);

@@ -29,7 +29,7 @@ export const set_price_for_question = async (req, res) => {
         update: {
           $set: {
             price: Math.round(
-              Number(new_price) * Number((exam.questions || []).length),
+              Number(new_price) * Number((Array.isArray(exam.questions) ? exam.questions : []).length),
             ),
           },
         },
