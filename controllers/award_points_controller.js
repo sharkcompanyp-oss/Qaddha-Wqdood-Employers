@@ -1,5 +1,6 @@
 import Students from "../models/student.js";
 import PointsLedger from "../models/points_ledger.js";
+import { callExamsBackend } from "../config/exams_backend.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -87,25 +88,18 @@ export const Award_Points = async (req, res) => {
     });
 
     // إشعار الطالب بالمنحة وسببها (شفافية تمنع «ليش صاحبي أخذ ونسيتني»)
-    const EXAMS_BACKEND_URL =
-      process.env.EXAMS_BACKEND_URL || "https://exams-back.onrender.com";
-    try {
-      await fetch(`${EXAMS_BACKEND_URL}/notify-student`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          student_ID,
-          title:
-            finalDelta > 0
-              ? `🎁 حصلت على ${finalDelta} نقطة`
-              : `تعديل نقاط: ${finalDelta}`,
-          body: `${reasonLabel} — رصيدك الآن ${updated.points} نقطة`,
-          INTERNAL_SECRET: process.env.INTERNAL_SECRET,
-        }),
-      });
-    } catch (notifyErr) {
-      console.error("فشل إشعار الطالب بالمنحة:", notifyErr);
-    }
+    await callExamsBackend(
+      "/notify-student",
+      {
+        student_ID,
+        title:
+          finalDelta > 0
+            ? `🎁 حصلت على ${finalDelta} نقطة`
+            : `تعديل نقاط: ${finalDelta}`,
+        body: `${reasonLabel} — رصيدك الآن ${updated.points} نقطة`,
+      },
+      "إشعار منح النقاط",
+    );
 
     res.status(200).json({
       message: "تم منح النقاط",

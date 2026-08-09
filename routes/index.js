@@ -15,6 +15,19 @@ import { Delete_Score } from "../controllers/delete_score_controller.js";
 import { Get_One_Subject } from "../controllers/Get_One_Subject_Controller.js";
 import { Save_Part } from "../controllers/save_part_controller.js";
 import {
+  Get_Subject_V2,
+  Get_Subjects_List_V2,
+} from "../controllers/get_subject_v2_controller.js";
+import {
+  Save_Lecture_V2,
+  Manage_Lectures_V2,
+} from "../controllers/save_lecture_v2_controller.js";
+import {
+  List_Unlinked_Texts,
+  Get_Text_Full,
+  Link_Text_To_Lecture,
+} from "../controllers/link_texts_controller.js";
+import {
   Upload_Lecture_Images,
   R2_Status,
 } from "../controllers/r2_images_controller.js";
@@ -38,6 +51,10 @@ import { Get_Requests } from "../controllers/get_requests_controller.js";
 import { Reject_Request } from "../controllers/reject_request_controller.js";
 import { Accept_Request } from "../controllers/accept_request_controller.js";
 import { Get_Analytics } from "../controllers/analytics_controller.js";
+import {
+  Preview_Reset_College,
+  Reset_College,
+} from "../controllers/reset_college_controller.js";
 import { Health } from "../controllers/health_Controller.js";
 import { set_price_for_question } from "../controllers/price_for_question_controller.js";
 import { Get_Complaints } from "../controllers/get_complaints_controller.js";
@@ -90,6 +107,19 @@ router.post("/getonesubject", Get_One_Subject);
 // الحفظ الجزئي: شريحة واحدة من محاضرة واحدة، بلا محاسبة أرباح ولا مساس بالمشتركين
 router.put("/exams/save-part", Save_Part);
 
+// ─── الهيكل الموحَّد (v2) ───────────────────────────────────────────────────
+// المحاضرة تحمل كل شيء، والمطابقة بـlecture_id وحده. تعمل بالتوازي مع
+// المسارات القديمة حتى تكتمل الهجرة، فلا ينقطع قارئ لم يُحدَّث بعد.
+router.post("/v2/subject", Get_Subject_V2);
+router.post("/v2/subjects", Get_Subjects_List_V2);
+router.put("/v2/lecture/save", Save_Lecture_V2);
+router.put("/v2/lecture/manage", Manage_Lectures_V2);
+// ربط نصوص المقرَّرات يدوياً: أسماء ملفات الكولكشن أرقام مجلدات لا تطابق
+// أسماء المحاضرات، فالمطابقة الآلية تخمين. عمليةٌ لمرّة واحدة تُفرغ الكولكشن.
+router.post("/v2/texts/unlinked", List_Unlinked_Texts);
+router.post("/v2/texts/full", Get_Text_Full);
+router.put("/v2/texts/link", Link_Text_To_Lecture);
+
 // خط الإنتاج: الصور إلى R2 (مفاتيحها سرّية فتبقى في الخادم)،
 // وMistral عبر وسيطٍ عند منع CORS (المفتاح يمرّ ولا يُخزَّن).
 //
@@ -115,6 +145,9 @@ router.post("/getrequests", Get_Requests);
 router.delete("/rejectrequest", Reject_Request);
 router.post("/acceptrequest", Accept_Request);
 router.get("/analytics", Get_Analytics);
+// تصفير كلية في نهاية الفصل — الاشتراكات وحدها، بمعاينة وتأكيد صريح
+router.post("/analytics/reset-preview", Preview_Reset_College);
+router.post("/analytics/reset-college", Reset_College);
 router.post("/priceforquestion", set_price_for_question);
 router.get("/complaints", Get_Complaints);
 router.post("/responde-to-complaint", Responde_To_Complaint);

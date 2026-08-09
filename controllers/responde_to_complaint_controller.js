@@ -1,6 +1,7 @@
 import Students from "../models/student.js";
 import complaint from "../models/complaint.js";
 import PointsLedger from "../models/points_ledger.js";
+import { callExamsBackend } from "../config/exams_backend.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -45,19 +46,16 @@ export const Responde_To_Complaint = async (req, res) => {
       }
     }
 
-    // إرسال إشعار للطالب
-    const EXAMS_BACKEND_URL =
-      process.env.EXAMS_BACKEND_URL || "https://exams-back.onrender.com";
-    await fetch(`${EXAMS_BACKEND_URL}/notify-student`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    // إرسال إشعار للطالب — فشله لا يمنع إغلاق الشكوى (كان يرمي فيُفشل الطلب كله)
+    await callExamsBackend(
+      "/notify-student",
+      {
         student_ID: student_ID,
         title: "تمت الإستجابة للشكوى",
         body: our_notes ? ` ${our_notes}` : "شكرا لتنبيهنا",
-        INTERNAL_SECRET: process.env.INTERNAL_SECRET, // ✅ من .env مو hardcoded
-      }),
-    });
+      },
+      "إشعار الرد على الشكوى",
+    );
 
     await The_Complaint.deleteOne();
 

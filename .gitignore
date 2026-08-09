@@ -18,5 +18,10 @@ Thumbs.db
 # Firebase
 serviceAccount.json
 
+# نسخ القاعدة الاحتياطية — عشرات الميغابايتات من محتوى المواد كاملاً.
+# لا تدخل المستودع: تخنق الدفع، وتضع بيانات الطلاب على GitHub.
+backups/
+*.dump.json
+
 # Environment variables
 .env

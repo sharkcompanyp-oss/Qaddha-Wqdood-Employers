@@ -1,5 +1,6 @@
 import Request from "../models/request.js";
 import Subjects from "../models/exam.js";
+import { callExamsBackend } from "../config/exams_backend.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -37,31 +38,28 @@ export const Accept_Request = async (req, res) => {
     await The_Request.save();
 
     // إبلاغ باك اند الطلاب: بث فوري بالسوكيت (إن كان التطبيق مفتوحاً) + إشعار FCM
-    const EXAMS_BACKEND_URL =
-      process.env.EXAMS_BACKEND_URL || "https://exams-back.onrender.com";
-    try {
-      await fetch(`${EXAMS_BACKEND_URL}/internal/request-status`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          student_ID: The_Request.student_ID,
-          status: "accepted",
-          exams_ids: The_Request.exams_ids,
-          title: "✅ تم القبول بنجاح",
-          body: our_notes
-            ? ` ${our_notes}`
-            : "أهلا وسهلا بك, يمكنك الآن الدخول لموادك",
-          INTERNAL_SECRET: process.env.INTERNAL_SECRET,
-        }),
-      });
-    } catch (notifyErr) {
-      // فشل التبليغ لا يلغي القبول — الطالب سيرى المادة عند أول تحديث
-      console.error("فشل تبليغ باك اند الطلاب بالقبول:", notifyErr);
-    }
+    const notified = await callExamsBackend(
+      "/internal/request-status",
+      {
+        student_ID: The_Request.student_ID,
+        status: "accepted",
+        exams_ids: The_Request.exams_ids,
+        title: "✅ تم القبول بنجاح",
+        body: our_notes
+          ? ` ${our_notes}`
+          : "أهلا وسهلا بك, يمكنك الآن الدخول لموادك",
+      },
+      "تبليغ القبول",
+    );
 
-    return res
-      .status(200)
-      .json({ message: "تم قبول الطلب وتسجيل الطالب في المواد" });
+    // القبول تمّ في القاعدة مهما حدث للتبليغ — لكن نقولها للمشرف صراحةً
+    // بدل «تم بنجاح» بينما الطالب لم يصله شيء.
+    return res.status(200).json({
+      message: notified.ok
+        ? "تم قبول الطلب وتسجيل الطالب في المواد"
+        : "تم قبول الطلب، لكن تعذّر إبلاغ الطالب (لن يصله إشعار فوري)",
+      notified: notified.ok,
+    });
   } catch (err) {
     return res.status(500).json("حدث خطأ في الخادم.");
   }

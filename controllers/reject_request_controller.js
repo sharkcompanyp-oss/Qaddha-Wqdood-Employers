@@ -1,4 +1,5 @@
 import Request from "../models/request.js";
+import { callExamsBackend } from "../config/exams_backend.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -24,28 +25,26 @@ export const Reject_Request = async (req, res) => {
     await The_Request.save();
 
     // إبلاغ باك اند الطلاب: بث فوري بالسوكيت + إشعار FCM
-    const EXAMS_BACKEND_URL =
-      process.env.EXAMS_BACKEND_URL || "https://exams-back.onrender.com";
-    try {
-      await fetch(`${EXAMS_BACKEND_URL}/internal/request-status`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          student_ID: The_Request.student_ID,
-          status: "rejected",
-          exams_ids: The_Request.exams_ids,
-          title: "❌ تم رفض الطلب",
-          body: our_notes
-            ? `سبب الرفض : ${our_notes}`
-            : "للأسف تم رفض طلب التسجيل",
-          INTERNAL_SECRET: process.env.INTERNAL_SECRET,
-        }),
-      });
-    } catch (notifyErr) {
-      console.error("فشل تبليغ باك اند الطلاب بالرفض:", notifyErr);
-    }
+    const notified = await callExamsBackend(
+      "/internal/request-status",
+      {
+        student_ID: The_Request.student_ID,
+        status: "rejected",
+        exams_ids: The_Request.exams_ids,
+        title: "❌ تم رفض الطلب",
+        body: our_notes
+          ? `سبب الرفض : ${our_notes}`
+          : "للأسف تم رفض طلب التسجيل",
+      },
+      "تبليغ الرفض",
+    );
 
-    return res.status(200).json({ message: "تم الرفض بنجاح" });
+    return res.status(200).json({
+      message: notified.ok
+        ? "تم الرفض بنجاح"
+        : "تم الرفض، لكن تعذّر إبلاغ الطالب (لن يصله إشعار فوري)",
+      notified: notified.ok,
+    });
   } catch (err) {
     return res.status(500).json("حدث خطأ في الخادم.");
   }

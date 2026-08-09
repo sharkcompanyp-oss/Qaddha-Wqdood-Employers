@@ -2,6 +2,7 @@ import Exams from "../models/exam.js";
 import Admins from "../models/admin.js"; // تأكد من الاسم الصحيح
 import Employers from "../models/employer.js";
 import { recomputeMoadalAvailability } from "../services/moadal_eligibility.js";
+import { purgePlansForStudents } from "../services/purge_plans.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -137,7 +138,29 @@ export const Update_Exam = async (req, res) => {
     setIf("questions", new_questions);
     setIf("time", new_time);
     setIf("visible", new_visible);
-    if (has_available) The_Exam.available_to = clean_new_available_to;
+
+    // ── إلغاء تسجيل طالب: تنظيف كامل لا حذفٌ من قائمة واحدة ──────────────
+    // من خرج من `available_to` يجب أن يخرج من `available_to_moadal` أيضاً
+    // (معدل تشمل ترفيع، فبقاؤه فيها يُبقي له نص المقرر والخطة والتحريري
+    // بعد أن رُفع اسمه من المادة)، وتُحذف خطته لهذه المادة نهائياً.
+    let removed_students = [];
+    if (has_available) {
+      const kept = new Set(clean_new_available_to.map(String));
+      removed_students = clean_old_available_to
+        .map(String)
+        .filter((id) => !kept.has(id));
+
+      The_Exam.available_to = clean_new_available_to;
+
+      if (removed_students.length > 0) {
+        const removedSet = new Set(removed_students);
+        The_Exam.available_to_moadal = (
+          Array.isArray(The_Exam.available_to_moadal)
+            ? The_Exam.available_to_moadal
+            : []
+        ).filter((id) => !removedSet.has(String(id)));
+      }
+    }
     setIf("open_mode", new_open_mode);
     setIf("price", new_price);
     if (new_price_moadal !== undefined) {
@@ -161,11 +184,28 @@ export const Update_Exam = async (req, res) => {
 
     await The_Exam.save();
 
+    // بعد نجاح الحفظ فقط: خطة من لم يعد مسجَّلاً تُحذف نهائياً هي ومهامها.
+    // (قبل الحفظ كنا سنحذف خططاً لتعديل قد يفشل.)
+    let purged = { plans: 0, tasks: 0 };
+    if (removed_students.length > 0) {
+      try {
+        purged = await purgePlansForStudents(
+          String(The_Exam._id),
+          removed_students,
+        );
+      } catch (purgeErr) {
+        // فشل التنظيف لا يُلغي التعديل — لكنه يُعلَن ليُعالَج
+        console.error("فشل حذف خطط الطلاب المحذوفين:", purgeErr);
+      }
+    }
+
     res.status(200).json({
       message: "تم تحديث بيانات المادة",
       profit_added: profit_to_add,
       old_count,
       new_count,
+      removed_students: removed_students.length,
+      purged_plans: purged.plans,
     });
   } catch (error) {
     console.log(error);

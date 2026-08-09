@@ -1,5 +1,6 @@
 import Subjects from "../models/exam.js";
 import Admin from "../models/admin.js";
+import { purgeAllPlansOfSubject } from "../services/purge_plans.js";
 
 /**
  * @param {import('express').Request} req
@@ -27,12 +28,21 @@ export const Add_Student_To_Exam = async (req, res) => {
       The_Exam.number_of_free_subscriptions = 0;
       await The_Exam.save();
 
+      // لا مشترك ⇒ لا خطة: تُحذف خطط هذه المادة كلها ومهامها
+      let purged = { plans: 0, tasks: 0 };
+      try {
+        purged = await purgeAllPlansOfSubject(String(The_Exam._id));
+      } catch (purgeErr) {
+        console.error("فشل حذف خطط المادة بعد التصفية:", purgeErr);
+      }
+
       return res.status(200).json({
         message: "تم تصفية جميع المشتركين بنجاح",
         exam: {
           name: The_Exam.name,
           studentsCount: 0,
         },
+        purged_plans: purged.plans,
       });
     }
 

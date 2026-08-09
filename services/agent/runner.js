@@ -10,6 +10,7 @@
 
 import complaint from "../../models/complaint.js";
 import Subject from "../../models/exam.js";
+import { callExamsBackend } from "../../config/exams_backend.js";
 import Students from "../../models/student.js";
 import AgentSetting from "../../models/agent_setting.js";
 import * as lectures from "./lectures.js";
@@ -81,20 +82,20 @@ async function applySectionFix(subjectId, si, sj, newSection) {
 // ── إشعار الطالب + حذف الشكوى (يعكس responde_to_complaint) ────────────────
 
 async function notifyAndClose(c, reply, cfg) {
-  const backend = process.env.EXAMS_BACKEND || "https://exams-back.onrender.com";
-  try {
-    await fetch(`${backend}/notify-student`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        student_ID: c.student_ID,
-        title: "تمت الإستجابة للشكوى",
-        body: reply || "شكراً لتنبيهك 💜",
-        INTERNAL_SECRET: process.env.INTERNAL_SECRET,
-      }),
-    });
-  } catch (e) {
-    return { notified: false, note: `notify failed: ${e.message}` };
+  // كان يقرأ متغيّراً باسم آخر (`EXAMS_BACKEND`) غير الذي تقرأه المتحكّمات
+  // (`EXAMS_BACKEND_URL`) — عنوانان مختلفان لجهة واحدة. المصدر موحّد الآن.
+  const sent = await callExamsBackend(
+    "/notify-student",
+    {
+      student_ID: c.student_ID,
+      title: "تمت الإستجابة للشكوى",
+      body: reply || "شكراً لتنبيهك 💜",
+    },
+    "إشعار وكيل الشكاوى",
+  );
+  if (!sent.ok) {
+    // لا نحذف شكوى لم يُبلَّغ صاحبها — تبقى للمحاولة القادمة
+    return { notified: false, note: `notify failed: ${sent.error || sent.status}` };
   }
   await complaint.deleteOne({ _id: c._id });
   return { notified: true, note: "student notified, complaint deleted" };

@@ -103,23 +103,68 @@ const WrittenQuestionSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// سؤال اختيار من متعدّد داخل المحاضرة. q_id معرّف ثابت لا يتغيّر:
+// تقدّم الطالب يُسجَّل عليه، فلو اعتمدنا الموضع لانزاح التقدّم كلّه
+// عند حذف سؤال واحد — صامتاً.
+const McqSchema = new mongoose.Schema(
+  {
+    q_id: { type: String, required: true },
+    question: { type: String, required: false, default: "" },
+    options: { type: [String], required: false, default: () => ["", "", "", ""] },
+    answer: { type: String, required: false, default: "" },
+  },
+  { _id: false },
+);
+
+// نصّ المقرَّر — كان في كولكشن LectureText منفصلاً يُطابَق بمسارٍ نصّي.
+// ضمّه هنا يجعل المحاضرة مصدراً واحداً، والجلب بالنطاق يمنع نقله لمن
+// لا يطلبه (انظر Get_One_Subject).
+const CurriculumSchema = new mongoose.Schema(
+  {
+    text: { type: String, required: false, default: "" },
+    source_file: { type: String, required: false, default: "" },
+    word_count: { type: Number, required: false, default: 0 },
+    updated_at: { type: Date, required: false, default: null },
+  },
+  { _id: false },
+);
+
+// ملخص المحاضرة — كان subject.summary[] يُطابَق بالعنوان النصّي
+const LectureSummarySchema = new mongoose.Schema(
+  {
+    sections: { type: [SectionSchema], default: [] },
+    word_count: { type: Number, required: false, default: 0 },
+  },
+  { _id: false },
+);
+
+// ─── كيان المحاضرة الموحَّد ───────────────────────────────────────────────────
+// كل ما يخصّ المحاضرة في كائنها: النصّ والملخص والأسئلة والبطاقات والتحريري.
+// المطابقة بـlecture_id وحده في كل قارئ — الاسم للعرض لا للربط.
+//
+// قبل هذا كان المحتوى موزَّعاً على أربعة مواضع بأربعة مفاتيح مختلفة
+// (مسار نصّي، عنوان ملخص، اسم مجموعة أسئلة، معرّف)، فحرفٌ يختلف في اسمٍ
+// يعني محتوىً معلّقاً لا يراه الطالب ولا يظهر إلا في شكوى.
 const LectureSchema = new mongoose.Schema(
   {
     lecture_id: { type: String, required: true },
-    title: { type: String, required: false, default: "" },
+    name: { type: String, required: false, default: "" },
     order: { type: Number, required: false, default: 0 },
-    // rel_path لوثيقة النص في كولكشن LectureText ("" = لا نص مربوط)
-    text_ref: { type: String, required: false, default: "" },
-    // اسم مجموعة الأسئلة المربوطة (حقل lecture النصي في questions[])
-    questions_lecture_name: { type: String, required: false, default: "" },
-    // تُحسَب في السيرفر عند الحفظ — أساس تقدير أزمنة الخطة الدراسية
-    word_count_text: { type: Number, required: false, default: 0 },
-    word_count_summary: { type: Number, required: false, default: 0 },
+
+    curriculum: { type: CurriculumSchema, default: () => ({}) },
+    summary: { type: LectureSummarySchema, default: () => ({}) },
+    questions: { type: [McqSchema], default: [] },
     flash_cards: { type: [FlashCardSchema], default: [] },
     written_exam: {
       duration_min: { type: Number, required: false, default: 30 },
       questions: { type: [WrittenQuestionSchema], default: [] },
     },
+
+    // حقول الهيكل القديم — تبقى للقراءة أثناء الانتقال ثم تُهمَل.
+    // حذفها الآن يكسر أي قارئ لم يُحدَّث بعد.
+    title: { type: String, required: false },
+    text_ref: { type: String, required: false },
+    questions_lecture_name: { type: String, required: false },
   },
   { _id: false },
 );
@@ -151,20 +196,38 @@ const SUBJECTS_SCHEMA = mongoose.Schema({
   },
   number_of_free_subscriptions: { type: Number, required: false, default: 0 },
   total_profit: { type: Number, required: false, default: 0 },
+  // ─── المصدر الواحد ───
+  lectures: { type: [LectureSchema], default: [] },
+
+  // أسئلة لا تنتمي لأي محاضرة — للمراجعة لا للعرض على الطالب.
+  // لا تُحذف: قد تكون محتوىً صالحاً فُقد ربطه، والحذف لا رجعة فيه.
+  orphan_questions: {
+    type: [
+      {
+        question: { type: String, default: "" },
+        options: { type: [String], default: () => ["", "", "", ""] },
+        answer: { type: String, default: "" },
+        was_lecture: { type: String, default: "" },
+      },
+    ],
+    default: [],
+  },
+
+  // ─── الهيكل القديم: يبقى للقراءة أثناء الانتقال ───
+  // بعد الهجرة تصير فارغة. لا تُحذف من المخطط قبل تحديث كل قارئ.
   questions: {
     type: [
       {
-        question: { type: String, required: true },
-        options: { type: [String], required: true },
-        answer: { type: String, required: true },
+        question: { type: String, required: false },
+        options: { type: [String], required: false },
+        answer: { type: String, required: false },
         lecture: { type: String, required: false, default: "" },
         lecture_id: { type: String, required: false, default: "" },
       },
     ],
+    default: undefined,
   },
   summary: { type: [SummarySchema], required: false, default: null },
-  // ─── كيان المحاضرة وخطة «معدل» ───
-  lectures: { type: [LectureSchema], default: [] },
   // سعر خطة «معدل» (price الحالي = سعر خطة «ترفيع»)
   price_moadal: { type: Number, required: false, default: 0 },
   // مشتق آلياً عند حفظ المحاضرات: كل محاضرة مكتملة الأنواع الخمسة
