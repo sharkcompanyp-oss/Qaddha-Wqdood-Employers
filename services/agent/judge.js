@@ -17,6 +17,7 @@ const KIND_LABEL = {
   summary: "قسم من ملخّص المحاضرة",
   flash: "بطاقة استرجاع (وجه/ظهر)",
   written: "سؤال اختبار تحريري مع جوابه النموذجي",
+  curriculum: "نصّ المقرَّر نفسه (الشكوى على النصّ لا على ما اشتُقّ منه)",
 };
 
 const FIELDS_BY_KIND = {
@@ -24,6 +25,10 @@ const FIELDS_BY_KIND = {
   summary: `أعد القسم كاملاً في المفتاح "section" بنفس بنيته ونفس id`,
   flash: `"front" (وجه البطاقة) أو "back" (ظهرها)`,
   written: `"question" (نصّ السؤال) أو "model_answer" (الجواب النموذجي)`,
+  curriculum: `{"old": المقطع الخاطئ حرفياً كما ورد في النصّ, "new": المقطع بعد التصحيح}.
+  ⚠ لا تُعد النصّ كاملاً أبداً — فقط المقطع المعنيّ. و"old" يجب أن يكون
+  نسخاً حرفياً موجوداً في النصّ مرةً واحدة (زد كلمةً قبله أو بعده إن لزم
+  لتفريده). لحذف سطرٍ دخيل اجعل "new" نصاً فارغاً.`,
 };
 
 const buildSystem = (recordKind, replyExamples) => {
@@ -112,7 +117,14 @@ export async function judgeWithLecture({
   // خطأٌ مؤكَّد بلا اقتباسٍ من المحاضرة ليس مؤكَّداً: النموذج يدّعيه أحياناً
   // استناداً إلى معرفته العامة، فيعيد كتابة المقرَّر الذي يُمتحَن به الطالب.
   // بلا شاهد نردّ ردّاً محايداً بدل أن نغيّر المحتوى.
-  if (v.verdict === "error_confirmed" && !String(v.evidence || "").trim()) {
+  // استثناء نصّ المقرَّر: هو المرجع والمشكوّ عنه معاً، فلا معنى لطلب
+  // اقتباسٍ منه يثبت خطأه. يكفي هناك أن يحدّد المقطع الخاطئ في fix.old.
+  const needsEvidence = recordKind !== "curriculum";
+  if (
+    v.verdict === "error_confirmed" &&
+    needsEvidence &&
+    !String(v.evidence || "").trim()
+  ) {
     v.verdict = "uncertain";
     v.fix = null;
   }

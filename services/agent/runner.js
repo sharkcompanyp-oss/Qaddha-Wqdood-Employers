@@ -133,6 +133,19 @@ function pickTarget(c, lecture) {
     };
   }
 
+  // خطأ في نصّ المقرَّر نفسه: النصّ هو المرجع وهو المشكوّ عنه في آنٍ واحد،
+  // فالتصحيح يقع عليه مباشرةً. أكثره أخطاء مسح ضوئي (كلمة مشوَّهة أو سطر
+  // دخيل)، والوكيل يراها في سياقها فيصلحها.
+  if (c.type === "curriculum_error") {
+    const text = String(lecture.curriculum?.text || "");
+    if (!text.trim()) return { error: "المحاضرة بلا نصّ مقرَّر." };
+    return {
+      kind: "curriculum",
+      path: `lectures.${lecture.__i}.curriculum`,
+      record: { text },
+    };
+  }
+
   if (c.type === "written_error") {
     const qs = lecture.written_exam?.questions || [];
     if (qs.length === 0) return { error: "المحاضرة بلا اختبار تحريري." };
@@ -165,6 +178,7 @@ const EDITABLE = {
   summary: new Set(["title", "content_blocks", "__section"]),
   flash: new Set(["front", "back"]),
   written: new Set(["question", "model_answer"]),
+  curriculum: new Set(["__replace"]),
 };
 
 /** يكتب التصحيح في مساره الصريح ويعيد ما قبله وما بعده للسجل */
@@ -185,6 +199,39 @@ async function applyFix(subjectId, target, fix) {
       field: "__section",
       before: JSON.stringify(target.record).slice(0, 500),
       after: JSON.stringify(next).slice(0, 500),
+    };
+  }
+
+  // نصّ المقرَّر: استبدال مقطعٍ بعينه لا إعادة كتابة النصّ كلّه. النصّ قد
+  // يبلغ خمسين ألف حرف، وطلب إعادته كاملاً من النموذج يعني اقتطاعاً أو
+  // هلوسةً في بقيّته. نطلب old/new ونستبدل الأول بالثاني إن وُجد مرةً واحدة.
+  if (target.kind === "curriculum") {
+    const oldFrag = String(fix.old || "");
+    const newFrag = String(fix.new ?? "");
+    if (!oldFrag.trim()) throw new Error("تصحيح النصّ بلا مقطعٍ أصليّ.");
+    const full = String(target.record.text || "");
+    const occurrences = full.split(oldFrag).length - 1;
+    if (occurrences === 0)
+      throw new Error("المقطع المطلوب تصحيحه غير موجود في النصّ.");
+    if (occurrences > 1)
+      throw new Error(`المقطع مكرَّر ${occurrences} مرات — الاستبدال غامض.`);
+
+    const next = full.replace(oldFrag, newFrag);
+    await Subject.updateOne(
+      { _id: subjectId },
+      {
+        $set: {
+          [`${target.path}.text`]: next,
+          [`${target.path}.word_count`]: next.trim().split(/\s+/).length,
+          [`${target.path}.updated_at`]: new Date(),
+        },
+      },
+    );
+    return {
+      kind: "curriculum",
+      field: "text",
+      before: oldFrag.slice(0, 500),
+      after: newFrag.slice(0, 500),
     };
   }
 

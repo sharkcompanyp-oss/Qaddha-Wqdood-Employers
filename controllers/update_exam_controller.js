@@ -20,10 +20,7 @@ export const Update_Exam = async (req, res) => {
       new_name,
       new_info,
       new_questions,
-      new_time,
-      new_visible,
       new_available_to,
-      new_open_mode,
       new_price,
       new_price_moadal,
       new_summary,
@@ -136,8 +133,6 @@ export const Update_Exam = async (req, res) => {
     setIf("name", new_name);
     setIf("info", new_info);
     setIf("questions", new_questions);
-    setIf("time", new_time);
-    setIf("visible", new_visible);
 
     // ── إلغاء تسجيل طالب: تنظيف كامل لا حذفٌ من قائمة واحدة ──────────────
     // من خرج من `available_to` يجب أن يخرج من `available_to_moadal` أيضاً
@@ -161,7 +156,6 @@ export const Update_Exam = async (req, res) => {
         ).filter((id) => !removedSet.has(String(id)));
       }
     }
-    setIf("open_mode", new_open_mode);
     setIf("price", new_price);
     if (new_price_moadal !== undefined) {
       The_Exam.price_moadal = Number(new_price_moadal) || 0;

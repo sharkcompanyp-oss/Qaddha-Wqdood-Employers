@@ -22,7 +22,13 @@ export const Get_Analytics = async (req, res) => {
             subject_name: "$name",
             college_id: 1,
             price: { $ifNull: ["$price", 0] },
+            price_moadal: { $ifNull: ["$price_moadal", 0] },
             enrolled_students: { $size: { $ifNull: ["$available_to", []] } },
+            // مشتركو «معدل» يُحسبون بسعرهم الخاص: كانوا خارج الحساب كلياً
+            // فتظهر مادةٌ بيعت خطتها بأرباح صفر.
+            moadal_students: {
+              $size: { $ifNull: ["$available_to_moadal", []] },
+            },
             free: { $ifNull: ["$number_of_free_subscriptions", 0] },
           },
         },
@@ -30,13 +36,22 @@ export const Get_Analytics = async (req, res) => {
           // الربح = (المشتركون − المجانيون) × السعر، ولا يقلّ عن صفر:
           // المجانيون قد يتجاوزون المشتركين في مادة تجريبية فيخرج رقم سالب
           // يُنقص الإجمالي بلا معنى.
+          // ويُضاف إليه ربح خطة «معدل» بسعرها المستقل.
           $addFields: {
-            total_profit: {
+            profit_tarfi3: {
               $multiply: [
                 { $max: [0, { $subtract: ["$enrolled_students", "$free"] }] },
                 "$price",
               ],
             },
+            profit_moadal: {
+              $multiply: ["$moadal_students", "$price_moadal"],
+            },
+          },
+        },
+        {
+          $addFields: {
+            total_profit: { $add: ["$profit_tarfi3", "$profit_moadal"] },
           },
         },
         { $project: { free: 0 } },
