@@ -1,107 +1,272 @@
-// المنسّق — يشغّل الوكيل على الشكاوى المعلّقة. لأن كل شيء يعمل داخل الـ backend
-// (على Render) فلا تعارض VPN: نقرأ Mongo ونستدعي النموذج ونكتب في خطوة واحدة.
+// ─── وكيل الشكاوى — الهيكل الموحَّد ─────────────────────────────────────────
+// أُعيدت كتابته بعد توحيد الهيكل. النسخة السابقة كانت تقرأ subjectDoc.questions
+// وsubjectDoc.summary وتكتب في `questions.${i}` و`summary.${si}.sections.${sj}` —
+// حقولٌ لم تعد موجودة، فكان كل تعديل يفشل صامتاً أو يخطئ الهدف.
 //
-// لكل شكوى:
-//   1) جِد السجل الحقيقي (سؤال/فقرة) — كما يفعل get_complaints
-//   2) أسنِد إلى نص المحاضرة: college→section → مجلد المادة → المحاضرة → نصها
-//   3) احكم بالاعتماد على المحاضرة
-//   4) إملائي واضح → صحّح (إن لم يكن dry_run)؛ علمي/غير واثق → للبشر؛ لا خطأ → رد
-//   5) أشعر الطالب واحذف الشكوى (كما يفعل responde-to-complaint)
+// المسار الآن مباشر بلا تخمين:
+//   الشكوى تحمل subject_id وlecture_id → نفتح المحاضرة بعينها
+//   → نأخذ المحتوى المشكوّ عنه حسب النوع → نحكم بالاعتماد على نصّ المقرَّر
+//   → نصحّح الحقل بمسارٍ صريح داخل lectures[i] → نشعر الطالب ونمنح النقاط.
+//
+// الأسماء تبقى مساراً احتياطياً للشكاوى القديمة التي لا تحمل معرّفات.
 
 import complaint from "../../models/complaint.js";
 import Subject from "../../models/exam.js";
 import { callExamsBackend } from "../../config/exams_backend.js";
-import Students from "../../models/student.js";
 import AgentSetting from "../../models/agent_setting.js";
-import * as lectures from "./lectures.js";
 import * as judge from "./judge.js";
 import { norm } from "./lectures.js";
+import { awardPointsTo } from "../../controllers/award_points_controller.js";
 
+// هذان النوعان وحدهما يبقيان لك: «مقرر مختلف» شكوى على المادة كلها لا على
+// عنصرٍ بعينه (قرارها رفع مقرَّر جديد — قرارٌ إداريّ لا تصحيح نصّ)، و«خطأ آخر»
+// نصّ حرّ بلا هدفٍ محدَّد. ما عداهما يحسمه الوكيل بنفسه.
 const ALWAYS_HUMAN = new Set(["different_curriculum", "other_error"]);
 
-// ── إيجاد السجل الحقيقي داخل المادة (نفس منطق get_section/get_question) ─────
+// ── تحديد المادة والمحاضرة ────────────────────────────────────────────────────
 
-function findQuestion(subjectDoc, questionText) {
-  const qs = subjectDoc.questions || [];
-  const n = (questionText || "").trim();
-  let idx = qs.findIndex((q) => (q.question || "") === questionText);
-  if (idx === -1) idx = qs.findIndex((q) => (q.question || "").trim() === n);
-  return idx === -1 ? null : { index: idx, obj: qs[idx] };
-}
-
-function lectureExact(title, name) {
-  return !!norm(name) && norm(title) === norm(name);
-}
-function lectureContains(title, name) {
-  const a = norm(title),
-    b = norm(name);
-  return b && (a.includes(b) || b.includes(a));
-}
-
-function findSection(subjectDoc, sectionId, lectureName) {
-  const summary = subjectDoc.summary || [];
-  const hits = [];
-  summary.forEach((sm, si) => {
-    const title = sm?.meta?.lecture_title || "";
-    (sm.sections || []).forEach((sec, sj) => {
-      if (sec.id === sectionId) hits.push({ si, sj, title, sec });
-    });
-  });
-  if (!hits.length) return { status: "notfound" };
-  if (hits.length === 1) return { status: "ok", ...hits[0] };
-  if (lectureName) {
-    const exact = hits.filter((h) => lectureExact(h.title, lectureName));
-    if (exact.length === 1) return { status: "ok", ...exact[0] };
-    if (exact.length === 0) {
-      const loose = hits.filter((h) => lectureContains(h.title, lectureName));
-      if (loose.length === 1) return { status: "ok", ...loose[0] };
-    }
+/** يفتح المادة: بالمعرّف أولاً (حاسم)، ثم بالاسم (للشكاوى القديمة) */
+async function resolveSubject(c) {
+  if (c.subject_id) {
+    const byId = await Subject.findById(c.subject_id).catch(() => null);
+    if (byId) return { subject: byId };
+    return { error: `المادة بالمعرّف '${c.subject_id}' غير موجودة.` };
   }
-  return { status: "ambiguous", titles: hits.map((h) => h.title) };
+  const matches = await Subject.find({ name: c.subject_name });
+  if (matches.length === 0)
+    return { error: `لم أجد المادة '${c.subject_name}'.` };
+  if (matches.length > 1)
+    return { error: `أكثر من مادة بالاسم '${c.subject_name}' — غامض.` };
+  return { subject: matches[0] };
 }
 
-// ── تطبيق التصحيح (تعديل جراحي للحقل الخاطئ فقط) ───────────────────────────
+/** يحدّد المحاضرة داخل المادة ويعيد فهرسها (المسار للكتابة يحتاج الفهرس) */
+function resolveLecture(subject, c) {
+  const ls = subject.lectures || [];
+  if (ls.length === 0) return { error: "المادة بلا محاضرات." };
 
-async function applyQuestionFix(subjectId, qIndex, fix) {
+  if (c.lecture_id) {
+    const i = ls.findIndex((l) => String(l.lecture_id) === String(c.lecture_id));
+    if (i === -1) return { error: `المحاضرة '${c.lecture_id}' غير موجودة.` };
+    return { index: i, lecture: ls[i] };
+  }
+
+  const want = norm(c.lecture_name || "");
+  if (!want) return { error: "الشكوى بلا محاضرة محدّدة." };
+
+  const nameOf = (l) => norm(l.name || l.title || l.questions_lecture_name || "");
+  let hits = ls
+    .map((l, i) => ({ l, i }))
+    .filter(({ l }) => nameOf(l) === want);
+  if (hits.length === 0) {
+    hits = ls
+      .map((l, i) => ({ l, i }))
+      .filter(({ l }) => {
+        const n = nameOf(l);
+        return n && (n.includes(want) || want.includes(n));
+      });
+  }
+  if (hits.length === 1) return { index: hits[0].i, lecture: hits[0].l };
+  if (hits.length > 1)
+    return { error: `اسم المحاضرة '${c.lecture_name}' يطابق أكثر من محاضرة.` };
+  return { error: `لم أجد المحاضرة '${c.lecture_name}'.` };
+}
+
+// ── انتقاء المحتوى المشكوّ عنه حسب نوع الشكوى ────────────────────────────────
+
+/** يختار من نصّ الشكوى العنصرَ المقصود داخل المحاضرة */
+function pickTarget(c, lecture) {
+  const hint = norm(c.question || c.complaint || "");
+
+  if (c.type === "question_error") {
+    const qs = lecture.questions || [];
+    if (qs.length === 0) return { error: "المحاضرة بلا أسئلة." };
+    let i = qs.findIndex((q) => norm(q.question || "") === norm(c.question || ""));
+    if (i === -1 && hint) {
+      i = qs.findIndex((q) => {
+        const n = norm(q.question || "");
+        return n && (n.includes(hint) || hint.includes(n));
+      });
+    }
+    if (i === -1) return { error: "لم أجد السؤال داخل المحاضرة." };
+    return {
+      kind: "question",
+      path: `lectures.${lecture.__i}.questions.${i}`,
+      record: {
+        question: qs[i].question || "",
+        options: qs[i].options || [],
+        answer: qs[i].answer ?? "",
+      },
+    };
+  }
+
+  if (c.type === "summary_error") {
+    const secs = lecture.summary?.sections || [];
+    if (secs.length === 0) return { error: "المحاضرة بلا ملخص." };
+    let j = c.section_id ? secs.findIndex((s) => s.id === c.section_id) : -1;
+    if (j === -1 && hint) {
+      j = secs.findIndex((s) => norm(s.title || "").includes(hint));
+    }
+    if (j === -1) return { error: `القسم '${c.section_id}' غير موجود.` };
+    return {
+      kind: "summary",
+      path: `lectures.${lecture.__i}.summary.sections.${j}`,
+      record: secs[j],
+    };
+  }
+
+  if (c.type === "flash_error") {
+    const cards = lecture.flash_cards || [];
+    if (cards.length === 0) return { error: "المحاضرة بلا بطاقات." };
+    let i = hint
+      ? cards.findIndex((x) => {
+          const f = norm(x.front || "");
+          const b = norm(x.back || "");
+          return (f && (f.includes(hint) || hint.includes(f))) || (b && hint.includes(b));
+        })
+      : -1;
+    if (i === -1) return { error: "لم أحدّد البطاقة المقصودة من نصّ الشكوى." };
+    return {
+      kind: "flash",
+      path: `lectures.${lecture.__i}.flash_cards.${i}`,
+      record: { front: cards[i].front || "", back: cards[i].back || "" },
+    };
+  }
+
+  if (c.type === "written_error") {
+    const qs = lecture.written_exam?.questions || [];
+    if (qs.length === 0) return { error: "المحاضرة بلا اختبار تحريري." };
+    let i = hint
+      ? qs.findIndex((q) => {
+          const n = norm(q.question || "");
+          return n && (n.includes(hint) || hint.includes(n));
+        })
+      : -1;
+    if (i === -1) return { error: "لم أحدّد سؤال التحريري المقصود." };
+    return {
+      kind: "written",
+      path: `lectures.${lecture.__i}.written_exam.questions.${i}`,
+      record: {
+        question: qs[i].question || "",
+        model_answer: qs[i].model_answer || "",
+      },
+    };
+  }
+
+  return { error: `نوع غير معروف '${c.type}'.` };
+}
+
+// ── تطبيق التصحيح ────────────────────────────────────────────────────────────
+
+// الحقول المسموح تعديلها لكل نوع. القائمة بيضاء صراحةً: نموذجٌ يقترح حقلاً
+// خارجها كان سيكتب في مكانٍ عشوائي داخل الوثيقة.
+const EDITABLE = {
+  question: new Set(["question", "answer", "options"]),
+  summary: new Set(["title", "content_blocks", "__section"]),
+  flash: new Set(["front", "back"]),
+  written: new Set(["question", "model_answer"]),
+};
+
+/** يكتب التصحيح في مساره الصريح ويعيد ما قبله وما بعده للسجل */
+async function applyFix(subjectId, target, fix) {
+  const allowed = EDITABLE[target.kind];
+  if (!allowed) throw new Error(`نوع غير قابل للتعديل: ${target.kind}`);
+
+  // الملخّص يُستبدل قسمُه كاملاً (بنية متداخلة لا حقل مفرد)
+  if (target.kind === "summary") {
+    const next = fix.section;
+    if (!next || typeof next !== "object")
+      throw new Error("تصحيح الملخص يحتاج كائن القسم كاملاً.");
+    if (next.id && target.record?.id && next.id !== target.record.id)
+      throw new Error("معرّف القسم في التصحيح لا يطابق الأصل.");
+    await Subject.updateOne({ _id: subjectId }, { $set: { [target.path]: next } });
+    return {
+      kind: target.kind,
+      field: "__section",
+      before: JSON.stringify(target.record).slice(0, 500),
+      after: JSON.stringify(next).slice(0, 500),
+    };
+  }
+
   const field = fix.field;
-  if (!["question", "answer", "options"].includes(field))
-    throw new Error(`حقل تصحيح غير معروف: ${field}`);
+  if (!allowed.has(field))
+    throw new Error(`حقل غير مسموح لهذا النوع: ${field}`);
+  if (fix.new === undefined || fix.new === null)
+    throw new Error("التصحيح بلا قيمة جديدة.");
+
   await Subject.updateOne(
     { _id: subjectId },
-    { $set: { [`questions.${qIndex}.${field}`]: fix.new } },
+    { $set: { [`${target.path}.${field}`]: fix.new } },
   );
+
+  return {
+    kind: target.kind,
+    field,
+    before: String(target.record?.[field] ?? "").slice(0, 500),
+    after: String(
+      typeof fix.new === "object" ? JSON.stringify(fix.new) : fix.new,
+    ).slice(0, 500),
+  };
 }
 
-async function applySectionFix(subjectId, si, sj, newSection) {
-  await Subject.updateOne(
-    { _id: subjectId },
-    { $set: { [`summary.${si}.sections.${sj}`]: newSection } },
-  );
+// ── مكافأة الطالب ────────────────────────────────────────────────────────────
+
+/** يمنح نقاطاً حين تصحّ الشكوى — فشلُه لا يُسقط المعالجة.
+ *  نستدعي منطق المنح مباشرةً: هو في هذا الخادم نفسه، ويتكفّل بالمجموع
+ *  والشارة والسجلّ. القيمة (30) من AWARD_PRESETS.complaint_valid — مصدر
+ *  الحقيقة واحد فلا يتفرّع رقمان. */
+async function awardPoints(studentID) {
+  try {
+    const r = await awardPointsTo({
+      student_ID: studentID,
+      reason_code: "complaint_valid",
+      note: "شكوى صحيحة صحّحها الوكيل آلياً",
+      admin_name: "وكيل الشكاوى",
+      source_type: "agent",
+    });
+    return r.delta;
+  } catch {
+    return 0;
+  }
 }
 
-// ── إشعار الطالب + حذف الشكوى (يعكس responde_to_complaint) ────────────────
+// ── إشعار الطالب + إغلاق الشكوى ──────────────────────────────────────────────
 
-async function notifyAndClose(c, reply, cfg) {
-  // كان يقرأ متغيّراً باسم آخر (`EXAMS_BACKEND`) غير الذي تقرأه المتحكّمات
-  // (`EXAMS_BACKEND_URL`) — عنوانان مختلفان لجهة واحدة. المصدر موحّد الآن.
+async function notifyAndClose(c, reply, { awarded = 0, fixRecord = null } = {}) {
+  const body = awarded
+    ? `${reply || "شكراً لتنبيهك 💜"}\n\n🎁 +${awarded} نقطة لأن ملاحظتك كانت صحيحة`
+    : reply || "شكراً لتنبيهك 💜";
+
   const sent = await callExamsBackend(
     "/notify-student",
-    {
-      student_ID: c.student_ID,
-      title: "تمت الإستجابة للشكوى",
-      body: reply || "شكراً لتنبيهك 💜",
-    },
+    { student_ID: c.student_ID, title: "تمت الإستجابة للشكوى", body },
     "إشعار وكيل الشكاوى",
   );
   if (!sent.ok) {
-    // لا نحذف شكوى لم يُبلَّغ صاحبها — تبقى للمحاولة القادمة
+    // لا نغلق شكوى لم يُبلَّغ صاحبها — تبقى للمحاولة القادمة
     return { notified: false, note: `notify failed: ${sent.error || sent.status}` };
   }
+
+  // الشكوى المصحَّحة تبقى بأثرها لا تُحذف: التعديل الآلي بلا سجلٍّ يُراجَع خطر
+  if (fixRecord) {
+    await complaint.updateOne(
+      { _id: c._id },
+      {
+        $set: {
+          status: "fixed",
+          applied_fix: { ...fixRecord, at: new Date() },
+          points_awarded: awarded,
+        },
+      },
+    );
+    return { notified: true, note: "تم التصحيح والإشعار — الشكوى محفوظة بأثرها" };
+  }
+
   await complaint.deleteOne({ _id: c._id });
   return { notified: true, note: "student notified, complaint deleted" };
 }
 
-// ── معالجة شكوى واحدة → كائن نتيجة ─────────────────────────────────────────
+// ── معالجة شكوى واحدة ────────────────────────────────────────────────────────
 
 async function processOne(c, cfg, ctx) {
   const base = {
@@ -121,119 +286,133 @@ async function processOne(c, cfg, ctx) {
   if (ALWAYS_HUMAN.has(c.type))
     return human(`النوع '${c.type}' يُراجَع بشرياً دائماً.`);
 
-  // 1) المادة الحقيقية في Subjects (بالاسم)
-  const subjMatches = await Subject.find({ name: c.subject_name });
-  if (subjMatches.length === 0)
-    return human(`لم أجد المادة '${c.subject_name}' في قاعدة الأسئلة.`);
-  if (subjMatches.length > 1)
-    return human(`أكثر من مادة بالاسم '${c.subject_name}' — غامض.`);
-  const subjectDoc = subjMatches[0];
+  // ① المادة
+  const s = await resolveSubject(c);
+  if (s.error) return human(s.error);
+  const subject = s.subject;
 
-  // السجل الحقيقي
-  let record = null,
-    recordKind,
-    locator = null;
-  if (c.type === "question_error") {
-    const q = findQuestion(subjectDoc, c.question);
-    if (!q) return human("لم أجد نص السؤال في المادة.");
-    record = {
-      question: q.obj.question || "",
-      options: q.obj.options || [],
-      answer: q.obj.answer || "",
-      lecture: q.obj.lecture || "",
-    };
-    recordKind = "question";
-    locator = { kind: "question", q_index: q.index };
-  } else if (c.type === "summary_error") {
-    const r = findSection(subjectDoc, c.section_id, c.lecture_name);
-    if (r.status === "notfound")
-      return human(`القسم '${c.section_id}' غير موجود.`);
-    if (r.status === "ambiguous")
-      return human(
-        `القسم '${c.section_id}' في أكثر من محاضرة ولم يتطابق اسم المحاضرة (${r.titles.join("، ")}).`,
-      );
-    record = r.sec;
-    recordKind = "summary";
-    locator = { kind: "section", si: r.si, sj: r.sj };
-  } else {
-    return human(`نوع غير معروف '${c.type}'.`);
+  // ② المحاضرة
+  const L = resolveLecture(subject, c);
+  if (L.error) return human(L.error, { subject_id: String(subject._id) });
+  const lecture = { ...(L.lecture.toObject?.() ?? L.lecture), __i: L.index };
+
+  // ③ المحتوى المشكوّ عنه
+  const target = pickTarget(c, lecture);
+  if (target.error)
+    return human(target.error, {
+      subject_id: String(subject._id),
+      lecture_id: lecture.lecture_id,
+    });
+
+  // ④ نصّ المقرَّر — صار داخل المحاضرة نفسها، بلا بحثٍ في كولكشن منفصل
+  const lectureText = String(lecture.curriculum?.text || "").trim();
+  if (!lectureText) {
+    return human("لا نصّ مقرَّر لهذه المحاضرة — لا مرجع للحكم.", {
+      subject_id: String(subject._id),
+      lecture_id: lecture.lecture_id,
+    });
   }
 
-  // 2) الإسناد إلى نص المحاضرة (من مجموعة lecture_texts)
-  const searchSections = lectures.sectionsToSearch(c.college_name);
-  const { section, folder } = await lectures.findSubjectAcrossSections(
-    c.subject_name,
-    searchSections,
-    ctx,
-  );
-  if (!folder)
-    return human(
-      `لم أجد مجلد نصوص المادة '${c.subject_name}' (بحثت في: ${searchSections.join("، ")}).`,
-    );
-
-  const index = await lectures.buildIndex(section, folder);
-  if (!index.length)
-    return human(`المادة '${folder}' لا تحتوي نصوص محاضرات بعد — للمقرّر.`);
-
-  // نمرّر نص الشكوى أيضاً ليستدلّ النموذج بالموضوع لا بالاسم الحرفي فقط
-  const lecId = await lectures.pickLecture(c.lecture_name, index, ctx, c.complaint);
-  if (!lecId)
-    return human(
-      `لم أجد المحاضرة '${c.lecture_name}' ضمن مادة '${folder}'.`,
-      { subject_folder: folder },
-    );
-
-  const lectureText = await lectures.readLecture(lecId);
-
-  // 3) الحكم بالاعتماد على المحاضرة
+  // ⑤ الحكم
   const verdict = await judge.judgeWithLecture({
     complaint: c,
-    record,
-    recordKind,
+    record: target.record,
+    recordKind: target.kind,
     lectureText,
     ctx,
   });
-  const withV = { ...base, subject_folder: folder, verdict };
+  const withV = {
+    ...base,
+    subject_id: String(subject._id),
+    lecture_id: lecture.lecture_id,
+    lecture_name: lecture.name || lecture.title || "",
+    verdict,
+  };
 
-  // 4) القرار
+  // ⑥ لا خطأ → ردّ بلا تعديل ولا نقاط
   if (verdict.verdict === "no_error") {
     const side = cfg.dry_run
       ? { notified: false, note: `[محاكاة] كان سيرد: ${verdict.student_reply}` }
-      : await notifyAndClose(c, verdict.student_reply, cfg);
-    return { ...withV, status: "replied", action: "REPLY_NO_ERROR", reply: verdict.student_reply, side };
+      : await notifyAndClose(c, verdict.student_reply);
+    return {
+      ...withV,
+      status: "replied",
+      action: "REPLY_NO_ERROR",
+      reply: verdict.student_reply,
+      side,
+    };
   }
 
+  // ⑦ خطأ واضح وواثق → صحّح وامنح النقاط
   if (judge.shouldAutofix(verdict, cfg.threshold)) {
-    const fix = verdict.fix;
-    if (!cfg.dry_run) {
-      if (recordKind === "question") {
-        await applyQuestionFix(subjectDoc._id, locator.q_index, fix);
-      } else {
-        const ns = fix.section;
-        if (ns && ns.id === (record.id || null))
-          await applySectionFix(subjectDoc._id, locator.si, locator.sj, ns);
-      }
+    if (cfg.dry_run) {
+      return {
+        ...withV,
+        status: "fixed",
+        action: "AUTO_FIX",
+        fix: verdict.fix,
+        target: target.path,
+        side: {
+          notified: false,
+          note: `[محاكاة] كان سيصحّح ${target.path} ويمنح نقاط الشكوى الصحيحة`,
+        },
+      };
     }
-    const side = cfg.dry_run
-      ? { notified: false, note: `[محاكاة] كان سيصحّح ويرد: ${verdict.student_reply}` }
-      : await notifyAndClose(c, verdict.student_reply, cfg);
-    return { ...withV, status: "fixed", action: "AUTO_FIX", fix, reply: verdict.student_reply, side };
+
+    let fixRecord;
+    try {
+      fixRecord = await applyFix(subject._id, target, verdict.fix);
+    } catch (e) {
+      return human(`تعذّر تطبيق التصحيح: ${e.message}`, {
+        verdict,
+        target: target.path,
+      });
+    }
+
+    const awarded = await awardPoints(c.student_ID);
+
+    const side = await notifyAndClose(c, verdict.student_reply, {
+      awarded,
+      fixRecord,
+    });
+    return {
+      ...withV,
+      status: "fixed",
+      action: "AUTO_FIX",
+      fix: verdict.fix,
+      target: target.path,
+      applied: fixRecord,
+      points: awarded,
+      side,
+    };
   }
 
-  // علمي / غير واثق / موضوع غير موجود → بشر
-  let reason = verdict.reason_for_human;
-  if (!reason) {
-    if (verdict.verdict === "scientific_error") reason = "خطأ علمي محتمل — يُحال للمقرّر.";
-    else if (!verdict.topic_found_in_lecture) reason = "الموضوع غير موجود بوضوح في المحاضرة.";
-    else reason = "غير واثق — للمراجعة البشرية.";
-  }
-  return { ...withV, status: "human", action: "ESCALATE_TO_HUMAN", reason };
+  // ⑧ لم يُثبت خطأ (غير واثق، أو الموضوع خارج المحاضرة، أو ثقة دون العتبة).
+  // نردّ على الطالب ونغلق: الوكيل موجود ليكفيك الشكاوى لا ليعيدها إليك.
+  // ما يُحال إليك هو ما تعذّر الوصول إليه أصلاً (مادة/محاضرة/عنصر مفقود)،
+  // وذلك عطلٌ في البيانات لا حكمٌ علميّ.
+  const reply =
+    verdict.student_reply ||
+    "راجعنا ملاحظتك والمحتوى مطابق لما في المحاضرة 💜";
+  const side = cfg.dry_run
+    ? { notified: false, note: `[محاكاة] كان سيرد: ${reply}` }
+    : await notifyAndClose(c, reply);
+  return {
+    ...withV,
+    status: "replied",
+    action: "REPLY_NO_FIX",
+    reply,
+    reason:
+      verdict.verdict === "uncertain" && !verdict.topic_found_in_lecture
+        ? "الموضوع غير مذكور في المحاضرة"
+        : "لم يُثبَت خطأ بشاهدٍ من المحاضرة",
+    side,
+  };
 }
 
-// ── نقطة الدخول ────────────────────────────────────────────────────────────
+// ── نقطة الدخول ──────────────────────────────────────────────────────────────
 
 export async function runAgent({ overrides = {} } = {}) {
-  // الإعدادات: من قاعدة البيانات (قابلة للتعديل من اللوحة) مع تجاوزات اختيارية
   let setting = await AgentSetting.findOne({ key: "default" });
   if (!setting) setting = await AgentSetting.create({ key: "default" });
   const cfg = {
@@ -252,9 +431,12 @@ export async function runAgent({ overrides = {} } = {}) {
       openrouter: process.env.OPENROUTER_API_KEY,
       dahl: process.env.DAHL_API_KEY,
     },
+    // أمثلة ردودك السابقة — يتعلّم منها الوكيل نبرتك
+    replyExamples: (setting.reply_examples || []).slice(-12),
   };
 
-  const query = complaint.find({});
+  // الشكاوى المعالَجة لا تُعاد معالجتها
+  const query = complaint.find({ status: { $in: [null, "new"] } });
   if (cfg.limit) query.limit(cfg.limit);
   const complaints = await query.exec();
 

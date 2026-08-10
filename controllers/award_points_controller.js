@@ -29,6 +29,58 @@ const badgeForPoints = (points) => {
 };
 
 /**
+ * منح النقاط كدالّة قابلة للاستدعاء داخلياً — يستعملها وكيل الشكاوى حين
+ * تصحّ شكوى ويصحّح المحتوى. استدعاء المتحكّم عبر HTTP من داخل نفس الخادم
+ * كان سيتطلّب تمرير كلمة السر ودورةَ شبكةٍ بلا داعٍ.
+ *
+ * يرمي عند الفشل — المنادي يقرّر ما يفعل.
+ */
+export const awardPointsTo = async ({
+  student_ID,
+  reason_code,
+  delta,
+  note,
+  admin_name,
+  source_type = "admin",
+}) => {
+  let finalDelta;
+  let reasonLabel;
+  if (AWARD_PRESETS[reason_code]) {
+    finalDelta = AWARD_PRESETS[reason_code].delta;
+    reasonLabel = AWARD_PRESETS[reason_code].label;
+  } else if (reason_code === "manual") {
+    finalDelta = Number(delta);
+    reasonLabel = note || "تعديل يدوي";
+    if (!Number.isFinite(finalDelta) || finalDelta === 0) {
+      throw new Error("قيمة النقاط غير صالحة");
+    }
+  } else {
+    throw new Error("كود سبب غير معروف");
+  }
+
+  const updated = await Students.findOneAndUpdate(
+    { ID: String(student_ID) },
+    { $inc: { points: finalDelta } },
+    { new: true },
+  );
+  if (!updated) throw new Error("الطالب غير موجود");
+
+  updated.badge = badgeForPoints(updated.points);
+  await updated.save();
+
+  const entry = await PointsLedger.create({
+    student_ID: String(student_ID),
+    delta: finalDelta,
+    reason_code,
+    note: note || reasonLabel,
+    source_type,
+    admin_name: admin_name || "",
+  });
+
+  return { delta: finalDelta, label: reasonLabel, points: updated.points, badge: updated.badge, entry };
+};
+
+/**
  * منح نقاط لطالب: قيمة جاهزة بكود السبب، أو reason_code="manual" بقيمة حرة.
  * body: { PASSWORD, student_ID, reason_code, delta?, note?, admin_name? }
  *

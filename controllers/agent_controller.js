@@ -52,13 +52,22 @@ export const Get_Agent_Config = async (req, res) => {
 export const Update_Agent_Config = async (req, res) => {
   if (!checkPassword(req, res)) return;
   try {
-    const { provider, model, dry_run, threshold, limit } = req.body;
+    const { provider, model, dry_run, threshold, limit, reply_examples } =
+      req.body;
     const update = { updated_at: new Date() };
     if (provider !== undefined) update.provider = provider;
     if (model !== undefined) update.model = model;
     if (dry_run !== undefined) update.dry_run = dry_run;
     if (threshold !== undefined) update.threshold = Number(threshold);
     if (limit !== undefined) update.limit = Number(limit);
+    // الأمثلة تُستبدل كاملةً: الإضافة والحذف يجريان في الواجهة على النسخة
+    // الحالية، فالإرسال الجزئي كان سيخسر ما لم يُرسَل.
+    if (Array.isArray(reply_examples)) {
+      update.reply_examples = reply_examples
+        .map((s) => String(s || "").trim())
+        .filter(Boolean)
+        .slice(0, 50);
+    }
     const setting = await AgentSetting.findOneAndUpdate(
       { key: "default" },
       { $set: update },

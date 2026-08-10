@@ -1,37 +1,81 @@
 // طبقة الحكم — تحكم على الشكوى بالاعتماد على نص المحاضرة (المرجع).
-// قاعدة توفير الطلبات: الخطأ الإملائي الواضح فقط يُصحّح آلياً؛ الخطأ العلمي
-// يُحال دائماً للمقرّر (البشر) ولا يُصحّح آلياً أبداً.
+//
+// المبدأ: الوكيل يحسم الشكوى بنفسه. يقارن ادّعاء الطالب بنصّ المحاضرة،
+// فإن وجد خطأً — أيّاً كان نوعه، علمياً أو إملائياً — صحّحه وأشعر ومنح
+// النقاط؛ وإن لم يجد، ردّ بأن لا خطأ. لا إحالة إلى البشر: الغرض من الوكيل
+// أن يكفي المقرّر مؤونة الشكاوى لا أن يعيدها إليه مصنَّفة.
+//
+// الضمانة الوحيدة الباقية هي الإسناد: كل تصحيح يجب أن يستند إلى موضعٍ
+// بعينه في نصّ المحاضرة (evidence). هذا ليس تقييداً على نوع الخطأ بل على
+// مصدره — يمنع أن يعيد النموذج كتابة المحتوى من معرفته العامة بدل المقرَّر
+// الذي يُمتحَن به الطالب فعلاً.
 
 import { askText, extractJson } from "./provider.js";
 
-const GROUNDED_SYSTEM = `أنت مراجع محتوى أكاديمي دقيق لتطبيق امتحانات جامعي سوري (محتوى عربي).
+const KIND_LABEL = {
+  question: "سؤال اختيار من متعدد",
+  summary: "قسم من ملخّص المحاضرة",
+  flash: "بطاقة استرجاع (وجه/ظهر)",
+  written: "سؤال اختبار تحريري مع جوابه النموذجي",
+};
+
+const FIELDS_BY_KIND = {
+  question: `"question" (نصّ السؤال) أو "answer" (الإجابة الصحيحة) أو "options" (مصفوفة الخيارات كاملةً)`,
+  summary: `أعد القسم كاملاً في المفتاح "section" بنفس بنيته ونفس id`,
+  flash: `"front" (وجه البطاقة) أو "back" (ظهرها)`,
+  written: `"question" (نصّ السؤال) أو "model_answer" (الجواب النموذجي)`,
+};
+
+const buildSystem = (recordKind, replyExamples) => {
+  const examples =
+    replyExamples && replyExamples.length
+      ? `\n\n===== أمثلة على ردودي السابقة (احتذِ نبرتها حرفياً) =====\n` +
+        replyExamples.map((e, i) => `${i + 1}. ${e}`).join("\n")
+      : "";
+
+  return `أنت مراجع محتوى أكاديمي دقيق لتطبيق امتحانات جامعي سوري (محتوى عربي).
 قدّم طالبٌ شكوى تدّعي وجود خطأ. لديك:
   (أ) نص المحاضرة الأصلية (المرجع الوحيد المعتمد للحكم)،
-  (ب) السجل موضع الشكوى (سؤال أو فقرة ملخّص)،
+  (ب) السجل موضع الشكوى: ${KIND_LABEL[recordKind] || recordKind}،
   (ج) ادّعاء الطالب.
 
-احكم بالاعتماد على نص المحاضرة فقط، وصنّف الخطأ:
-- "spelling_error": خطأ إملائي/طباعي واضح في نص عربي. آمن للتصحيح الآلي عند وضوحه.
-- "scientific_error": خطأ علمي/مفاهيمي (تعريف خاطئ، إجابة صحيحة خاطئة، مفهوم مغلوط).
+مهمّتك أن تحسم الشكوى بنفسك: قارن ادّعاء الطالب بنصّ المحاضرة، فإن كان
+محقّاً فصحّح الخطأ مهما كان نوعه (علمياً أو مفاهيمياً أو إملائياً أو
+طباعياً)، وإن كان مخطئاً فاشرح له باختصار أن المحتوى صحيح.
+
+صنّف حكمك:
+- "error_confirmed": يوجد خطأ فعلاً ويمكنك إثباته من نصّ المحاضرة. صحّحه.
 - "no_error": السجل صحيح ومطابق للمحاضرة؛ الطالب مخطئ.
-- "uncertain": الموضوع غير مذكور بوضوح في المحاضرة أو لا تستطيع الجزم. للبشر.
+- "uncertain": الموضوع غير مذكور في المحاضرة إطلاقاً فلا مرجع للحكم.
 
-قاعدة مهمة: الخطأ العلمي لا يُصحّح آلياً أبداً — يُحال دائماً للمقرّر (البشر).
-فقط الخطأ الإملائي الواضح يُقترح له تصحيح.
+قواعد ملزمة:
+① كل تصحيح يستند إلى نصّ المحاضرة. املأ "evidence" باقتباسٍ حرفيّ قصير
+   من النصّ يثبت الخطأ. بلا اقتباس لا تصحيح — لا تصحّح من معرفتك العامة،
+   فالطالب يُمتحَن بهذا المقرَّر لا بما تعرفه أنت.
+② إن خالف المقرَّر ما تعرفه أنت، فالمقرَّر هو المرجع. اجعل الحكم
+   "no_error" واشرح للطالب أن هذا ما ورد في محاضرته.
+③ التصحيح جراحيّ: غيّر الحقل المعنيّ وحده، وأبقِ ما عداه كما هو حرفياً.
+④ لا تختلق معلومة ليست في نصّ المحاضرة.
+⑤ إن لم تجد الموضوع في المحاضرة أصلاً فالحكم "uncertain" لا "error_confirmed".
 
-صياغة الرد للطالب (student_reply): مختصر جداً، جملتان كحدٍّ أقصى، بلا حشو، وينتهي
-بالرمز 💜. أمثلة: "شكراً لتنبيهك، صحّحنا الخطأ 💜" / "راجعنا والمعلومة صحيحة كما في المحاضرة 💜".
+حقول التصحيح المسموحة لهذا النوع: ${FIELDS_BY_KIND[recordKind] || "—"}
+
+صياغة الرد للطالب (student_reply): مختصر جداً، جملتان كحدٍّ أقصى، بلا حشو،
+وينتهي بالرمز 💜.${examples}
 
 أعد JSON فقط (بدون أسوار) بالمفاتيح:
   verdict, confidence (0..1), error_clarity ("clear"|"ambiguous"),
   topic_found_in_lecture (true/false),
-  fix (للإملائي فقط: {"field":..., "old":..., "new":...} وإلا null),
-  reason_for_human, student_reply`;
+  evidence (اقتباس حرفي قصير من المحاضرة يثبت الحكم، أو null),
+  error_kind ("scientific"|"spelling"|"other" — لأثر المراجعة فقط),
+  fix ({"field":..., "old":..., "new":...} أو {"section":{...}} للملخّص، وإلا null),
+  student_reply`;
+};
 
 export async function judgeWithLecture({
   complaint,
   record,
-  recordKind, // "question" | "summary"
+  recordKind, // "question" | "summary" | "flash" | "written"
   lectureText,
   ctx,
 }) {
@@ -46,7 +90,7 @@ export async function judgeWithLecture({
     },
   };
   const prompt =
-    GROUNDED_SYSTEM +
+    buildSystem(recordKind, ctx?.replyExamples) +
     "\n\n===== نص المحاضرة (المرجع) =====\n" +
     (lectureText || "(فارغ)") +
     "\n\n===== بيانات الشكوى =====\n" +
@@ -60,22 +104,25 @@ export async function judgeWithLecture({
   v.confidence = typeof v.confidence === "number" ? v.confidence : 0;
   v.error_clarity = v.error_clarity || "ambiguous";
   if (v.topic_found_in_lecture === undefined) v.topic_found_in_lecture = false;
+  v.evidence = v.evidence ?? null;
+  v.error_kind = v.error_kind || "other";
   v.fix = v.fix ?? null;
-  v.reason_for_human = v.reason_for_human ?? null;
   v.student_reply = v.student_reply || "شكراً لتنبيهك، وصلت شكواك 💜";
 
-  // فرض القاعدة: الخطأ العلمي لا يُصحّح آلياً أبداً — يُلغى أي تصحيح ويُحال للبشر.
-  if (v.verdict === "scientific_error") {
+  // خطأٌ مؤكَّد بلا اقتباسٍ من المحاضرة ليس مؤكَّداً: النموذج يدّعيه أحياناً
+  // استناداً إلى معرفته العامة، فيعيد كتابة المقرَّر الذي يُمتحَن به الطالب.
+  // بلا شاهد نردّ ردّاً محايداً بدل أن نغيّر المحتوى.
+  if (v.verdict === "error_confirmed" && !String(v.evidence || "").trim()) {
+    v.verdict = "uncertain";
     v.fix = null;
-    if (!v.reason_for_human)
-      v.reason_for_human = "خطأ علمي محتمل — يُحال للمقرّر للمراجعة.";
   }
+
   return v;
 }
 
-// البوابة: يُصحَّح آلياً فقط الخطأ الإملائي الواضح مع تصحيح وثقة كافية.
+// البوابة: يُصحَّح كل خطأ مؤكَّد ومُسنَد إلى المحاضرة، أياً كان نوعه.
 export function shouldAutofix(verdict, threshold) {
-  if (verdict.verdict !== "spelling_error") return false;
+  if (verdict.verdict !== "error_confirmed") return false;
   if (!verdict.fix) return false;
   if (Number(verdict.confidence || 0) < threshold) return false;
   return verdict.error_clarity === "clear";

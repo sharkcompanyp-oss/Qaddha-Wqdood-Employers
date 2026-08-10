@@ -33,6 +33,18 @@ const LIGHT = {
   number_of_free_subscriptions: 1,
 };
 
+/** اسم المحاضرة: name هو الحقل المعتمد، وtitle بقيّة من الهيكل القديم.
+ *  محاضرات هاجرت بـtitle وحده كانت تظهر بلا اسم في كل شاشة وفي الخطة
+ *  الدراسية — والطالب يرى مهامّ بلا عنوان. الرجوع إلى title هنا يعالج
+ *  كل القرّاء دفعةً واحدة بدل ترقيع كل شاشة على حدة. */
+const LECTURE_NAME = {
+  $cond: [
+    { $gt: [{ $strLenCP: { $ifNull: ["$$l.name", ""] } }, 0] },
+    "$$l.name",
+    { $ifNull: ["$$l.title", ""] },
+  ],
+};
+
 /** يبني تعبير $map يختار الحقول المطلوبة من كل محاضرة */
 const mapLectures = (fields) => ({
   $map: {
@@ -43,7 +55,11 @@ const mapLectures = (fields) => ({
         acc[f] = `$$l.${f}`;
         return acc;
       },
-      { lecture_id: "$$l.lecture_id", name: "$$l.name", order: "$$l.order" },
+      {
+        lecture_id: "$$l.lecture_id",
+        name: LECTURE_NAME,
+        order: "$$l.order",
+      },
     ),
   },
 });
@@ -55,7 +71,7 @@ const COUNTS = {
     as: "l",
     in: {
       lecture_id: "$$l.lecture_id",
-      name: "$$l.name",
+      name: LECTURE_NAME,
       order: "$$l.order",
       has_curriculum: {
         $gt: [{ $strLenCP: { $ifNull: ["$$l.curriculum.text", ""] } }, 0],
@@ -101,10 +117,10 @@ export const Get_Subject_V2 = async (req, res) => {
       }
       const project =
         scope === "curriculum"
-          ? { lecture_id: "$$l.lecture_id", name: "$$l.name", curriculum: "$$l.curriculum" }
+          ? { lecture_id: "$$l.lecture_id", name: LECTURE_NAME, curriculum: "$$l.curriculum" }
           : {
               lecture_id: "$$l.lecture_id",
-              name: "$$l.name",
+              name: LECTURE_NAME,
               order: "$$l.order",
               curriculum: "$$l.curriculum",
               summary: "$$l.summary",

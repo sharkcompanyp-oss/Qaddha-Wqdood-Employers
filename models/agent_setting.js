@@ -14,6 +14,10 @@ const AGENT_SETTING_SCHEMA = new mongoose.Schema({
   threshold: { type: Number, default: 0.85 }, // عتبة الثقة للتصحيح الإملائي الآلي
   limit: { type: Number, default: 0 }, // 0 = كل الشكاوى
 
+  // أمثلة على ردودك للطلاب (تظهر في الإشعار). تُحقن في البرومبت ليحتذي
+  // الوكيل نبرتك بدل نبرةٍ عامة. تُضاف يدوياً من اللوحة وتتراكم.
+  reply_examples: { type: [String], default: [] },
+
   updated_at: { type: Date, default: Date.now },
 });
 
