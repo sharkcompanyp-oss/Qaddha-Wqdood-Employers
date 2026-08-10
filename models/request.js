@@ -20,6 +20,10 @@ const REQUEST_SCHEMA = mongoose.Schema({
   student_notes: { type: String, required: false, default: "" },
   status: { type: String, required: false, default: "pending" },
   our_notes: { type: String, required: false, default: "" },
+  // تواريخ الطلب — تُنسخ إلى بيانات الخطة لتُحسم بها مطالبات الاسترداد
+  // بلا بحثٍ في سجلّات أخرى. بدونها لم يكن للطلب تاريخ أصلاً.
+  created_at: { type: Date, default: Date.now },
+  accepted_at: { type: Date, default: null },
 });
 
 export default mongoose.model("Request", REQUEST_SCHEMA);

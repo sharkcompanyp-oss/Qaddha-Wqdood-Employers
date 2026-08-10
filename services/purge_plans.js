@@ -13,6 +13,9 @@ import StudyTask from "../models/study_task.js";
 //   • إعادة التسجيل تُنشئ خطةً جديدة ولا تُحيي القديمة
 // يتحقّق ذلك بشرط status في كل قارئ، لا بإفناء البيانات.
 
+// حدّ الإنجاز الذي يُبنى عليه قرار الضمان
+const DONE_THRESHOLD = 90;
+
 /** الحقول التي تختم الأرشفة */
 const archiveSet = (reason) => ({
   status: "archived",
@@ -21,9 +24,96 @@ const archiveSet = (reason) => ({
 });
 
 /**
- * يؤرشف خطط طلاب بعينهم في مادة واحدة.
- * @returns {Promise<{plans:number, tasks:number}>}
+ * يحسب لقطة إنجاز كل خطة من مهامّها ويجمّدها.
+ * تُحسب مرّةً واحدة لأن إعادة حسابها لاحقاً قد تعطي رقماً مختلفاً لو
+ * تغيّرت المادة — والسجلّ يجب أن يبقى شاهداً على ما جرى وقتها.
  */
+const computeCompletions = async (planIds) => {
+  const tasks = await StudyTask.find({ plan_id: { $in: planIds } })
+    .select("plan_id status type")
+    .lean();
+
+  const byPlan = new Map(planIds.map((id) => [String(id), []]));
+  tasks.forEach((t) => {
+    const arr = byPlan.get(String(t.plan_id));
+    if (arr) arr.push(t);
+  });
+
+  const out = new Map();
+  for (const [planId, list] of byPlan) {
+    const total = list.length;
+    const done = list.filter((t) => t.status === "done").length;
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+    // ما لم يُنجَز، مصنَّفاً بنوعه — مادةُ التحليل لاحقاً
+    const pendingByType = {};
+    list
+      .filter((t) => t.status !== "done")
+      .forEach((t) => {
+        const k = t.type || "unknown";
+        pendingByType[k] = (pendingByType[k] || 0) + 1;
+      });
+
+    out.set(planId, {
+      label: pct >= DONE_THRESHOLD ? "منجز" : "غير منجز",
+      pct,
+      tasks_total: total,
+      tasks_done: done,
+      pending_by_type: pendingByType,
+      computed_at: new Date(),
+    });
+  }
+  return out;
+};
+
+
+/**
+ * جوهر الأرشفة — تستعمله الدوال الثلاث. توحيده يمنع أن تُصلَح ثغرة في
+ * إحداها وتبقى في أختيها.
+ */
+const archivePlans = async (filter, reason, label) => {
+  const scoped = { ...filter, status: { $ne: "archived" } };
+  const plans = await StudyPlan.find(scoped).select("_id").lean();
+  if (plans.length === 0) return { plans: 0, tasks: 0 };
+
+  const planIds = plans.map((p) => String(p._id));
+
+  // ① لقطة الإنجاز **قبل** تجميد المهام: بعد تحويلها إلى archived تختلط
+  //    غير المنجَزة بالمنجَزة فلا يعود الحساب صادقاً.
+  const completions = await computeCompletions(planIds);
+
+  // ② تجميد المهام المعلّقة — تبقى بتفاصيلها ولا تُطالِب الطالب
+  const tasks = await StudyTask.updateMany(
+    { plan_id: { $in: planIds }, status: "pending" },
+    { $set: { status: "archived" } },
+  );
+
+  // ③ ختم كل خطة بحالتها ولقطتها. bulkWrite لأن لكل خطة لقطتها الخاصة.
+  const res = await StudyPlan.bulkWrite(
+    plans.map((p) => ({
+      updateOne: {
+        filter: { _id: p._id },
+        update: {
+          $set: {
+            ...archiveSet(reason),
+            completion: completions.get(String(p._id)),
+          },
+        },
+      },
+    })),
+  );
+
+  const doneCount = [...completions.values()].filter(
+    (c) => c.label === "منجز",
+  ).length;
+  console.log(
+    `[خطط] ${label}: أُرشفت ${res.modifiedCount} خطة (${doneCount} منجزة) ` +
+      `و${tasks.modifiedCount} مهمة`,
+  );
+  return { plans: res.modifiedCount, tasks: tasks.modifiedCount };
+};
+
+/** يؤرشف خطط طلاب بعينهم في مادة واحدة. */
 export const purgePlansForStudents = async (
   subject_id,
   student_IDs,
@@ -31,29 +121,11 @@ export const purgePlansForStudents = async (
 ) => {
   const ids = [...new Set((student_IDs || []).map(String).filter(Boolean))];
   if (!subject_id || ids.length === 0) return { plans: 0, tasks: 0 };
-
-  const filter = {
-    subject_id: String(subject_id),
-    student_ID: { $in: ids },
-    status: { $ne: "archived" },
-  };
-  const plans = await StudyPlan.find(filter).select("_id").lean();
-  if (plans.length === 0) return { plans: 0, tasks: 0 };
-
-  const planIds = plans.map((p) => String(p._id));
-  // المهام تبقى كما هي — هي تفصيل الخطة الذي أردتَ رؤيته. نجمّدها فقط
-  // بحيث لا تظهر كـ«معلّقة» في أي حساب.
-  const tasks = await StudyTask.updateMany(
-    { plan_id: { $in: planIds }, status: "pending" },
-    { $set: { status: "archived" } },
+  return archivePlans(
+    { subject_id: String(subject_id), student_ID: { $in: ids } },
+    reason,
+    `المادة ${subject_id} (طلاب: ${ids.join("، ")})`,
   );
-  const archived = await StudyPlan.updateMany(filter, { $set: archiveSet(reason) });
-
-  console.log(
-    `[خطط] أُرشفت ${archived.modifiedCount} خطة و${tasks.modifiedCount} مهمة ` +
-      `للمادة ${subject_id} (طلاب: ${ids.join("، ")})`,
-  );
-  return { plans: archived.modifiedCount, tasks: tasks.modifiedCount };
 };
 
 /** يؤرشف كل خطط مادة (عند تصفية كل المشتركين منها). */
@@ -62,21 +134,11 @@ export const purgeAllPlansOfSubject = async (
   reason = "تصفير المادة",
 ) => {
   if (!subject_id) return { plans: 0, tasks: 0 };
-  const filter = { subject_id: String(subject_id), status: { $ne: "archived" } };
-  const plans = await StudyPlan.find(filter).select("_id").lean();
-  if (plans.length === 0) return { plans: 0, tasks: 0 };
-
-  const planIds = plans.map((p) => String(p._id));
-  const tasks = await StudyTask.updateMany(
-    { plan_id: { $in: planIds }, status: "pending" },
-    { $set: { status: "archived" } },
+  return archivePlans(
+    { subject_id: String(subject_id) },
+    reason,
+    `المادة ${subject_id}`,
   );
-  const archived = await StudyPlan.updateMany(filter, { $set: archiveSet(reason) });
-
-  console.log(
-    `[خطط] المادة ${subject_id}: أُرشفت ${archived.modifiedCount} خطة و${tasks.modifiedCount} مهمة`,
-  );
-  return { plans: archived.modifiedCount, tasks: tasks.modifiedCount };
 };
 
 /** يؤرشف كل خطط طالب في كل المواد (عند حذف الطالب نفسه). */
@@ -85,19 +147,9 @@ export const purgeAllPlansOfStudent = async (
   reason = "حذف الطالب",
 ) => {
   if (!student_ID) return { plans: 0, tasks: 0 };
-  const filter = { student_ID: String(student_ID), status: { $ne: "archived" } };
-  const plans = await StudyPlan.find(filter).select("_id").lean();
-  if (plans.length === 0) return { plans: 0, tasks: 0 };
-
-  const planIds = plans.map((p) => String(p._id));
-  const tasks = await StudyTask.updateMany(
-    { plan_id: { $in: planIds }, status: "pending" },
-    { $set: { status: "archived" } },
+  return archivePlans(
+    { student_ID: String(student_ID) },
+    reason,
+    `الطالب ${student_ID}`,
   );
-  const archived = await StudyPlan.updateMany(filter, { $set: archiveSet(reason) });
-
-  console.log(
-    `[خطط] الطالب ${student_ID}: أُرشفت ${archived.modifiedCount} خطة و${tasks.modifiedCount} مهمة`,
-  );
-  return { plans: archived.modifiedCount, tasks: tasks.modifiedCount };
 };

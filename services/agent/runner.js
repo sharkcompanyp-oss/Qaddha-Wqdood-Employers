@@ -118,13 +118,22 @@ function pickTarget(c, lecture) {
   if (c.type === "flash_error") {
     const cards = lecture.flash_cards || [];
     if (cards.length === 0) return { error: "المحاضرة بلا بطاقات." };
-    let i = hint
-      ? cards.findIndex((x) => {
-          const f = norm(x.front || "");
-          const b = norm(x.back || "");
-          return (f && (f.includes(hint) || hint.includes(f))) || (b && hint.includes(b));
-        })
-      : -1;
+    // الفهرس أوّلاً: زرّ الإبلاغ فوق البطاقة يرسله، وهو أدقّ من أي
+    // مطابقة نصّية. نتحقّق أن النصّ ما زال يطابق قبل الاعتماد عليه —
+    // فقد تُحذف بطاقة أو يُعاد ترتيبها بين الإبلاغ والمعالجة.
+    let i = -1;
+    const idx = Number(c.item_index);
+    if (Number.isInteger(idx) && idx >= 0 && idx < cards.length) {
+      const expected = norm(c.card_front || c.item_text || "");
+      if (!expected || norm(cards[idx].front || "") === expected) i = idx;
+    }
+    if (i === -1 && hint) {
+      i = cards.findIndex((x) => {
+        const f = norm(x.front || "");
+        const b = norm(x.back || "");
+        return (f && (f.includes(hint) || hint.includes(f))) || (b && hint.includes(b));
+      });
+    }
     if (i === -1) return { error: "لم أحدّد البطاقة المقصودة من نصّ الشكوى." };
     return {
       kind: "flash",
@@ -139,22 +148,45 @@ function pickTarget(c, lecture) {
   if (c.type === "curriculum_error") {
     const text = String(lecture.curriculum?.text || "");
     if (!text.trim()) return { error: "المحاضرة بلا نصّ مقرَّر." };
+
+    // شاشة الإبلاغ ترسل اقتباس الطالب داخل نصّ الشكوى بين «…». نستخرجه
+    // ونقتطع ما حوله: عرض خمسين ألف حرف على النموذج يُغرق الموضع المقصود،
+    // ويجعل fix.old يقع على تكرارٍ آخر من الكلمة نفسها في مكانٍ بعيد.
+    const quoted = String(c.complaint || "").match(/«([^»]{3,400})»/);
+    let excerpt = text;
+    let offset = 0;
+    if (quoted) {
+      const at = text.indexOf(quoted[1]);
+      if (at !== -1) {
+        offset = Math.max(0, at - 600);
+        excerpt = text.slice(offset, at + quoted[1].length + 600);
+      }
+    }
+
     return {
       kind: "curriculum",
       path: `lectures.${lecture.__i}.curriculum`,
-      record: { text },
+      record: { text: excerpt, quoted: quoted ? quoted[1] : null },
+      fullText: text,
     };
   }
 
   if (c.type === "written_error") {
     const qs = lecture.written_exam?.questions || [];
     if (qs.length === 0) return { error: "المحاضرة بلا اختبار تحريري." };
-    let i = hint
-      ? qs.findIndex((q) => {
-          const n = norm(q.question || "");
-          return n && (n.includes(hint) || hint.includes(n));
-        })
-      : -1;
+    // الفهرس أوّلاً (يرسله زرّ الإبلاغ بعد التصحيح)، والنصّ للتحقّق
+    let i = -1;
+    const idx = Number(c.item_index);
+    if (Number.isInteger(idx) && idx >= 0 && idx < qs.length) {
+      const expected = norm(c.question || c.item_text || "");
+      if (!expected || norm(qs[idx].question || "") === expected) i = idx;
+    }
+    if (i === -1 && hint) {
+      i = qs.findIndex((q) => {
+        const n = norm(q.question || "");
+        return n && (n.includes(hint) || hint.includes(n));
+      });
+    }
     if (i === -1) return { error: "لم أحدّد سؤال التحريري المقصود." };
     return {
       kind: "written",
@@ -209,7 +241,8 @@ async function applyFix(subjectId, target, fix) {
     const oldFrag = String(fix.old || "");
     const newFrag = String(fix.new ?? "");
     if (!oldFrag.trim()) throw new Error("تصحيح النصّ بلا مقطعٍ أصليّ.");
-    const full = String(target.record.text || "");
+    // الكتابة على النصّ الكامل لا على المقتطف الذي عُرض على النموذج
+    const full = String(target.fullText ?? target.record.text ?? "");
     const occurrences = full.split(oldFrag).length - 1;
     if (occurrences === 0)
       throw new Error("المقطع المطلوب تصحيحه غير موجود في النصّ.");

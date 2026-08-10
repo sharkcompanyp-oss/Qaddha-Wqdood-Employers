@@ -19,6 +19,16 @@ const COMPLAINT_SCHEMA = mongoose.Schema({
   subject_id: { type: String, required: false, default: "" },
   lecture_id: { type: String, required: false, default: "" },
 
+  // موضع العنصر داخل المحاضرة — يرسله زرّ الإبلاغ فوق البطاقة أو تحت
+  // سؤال التحريري. الفهرس أدقّ من أي مطابقة نصّية: يصل الوكيل إلى
+  // العنصر مباشرةً حتى لو تشابه نصّه مع غيره.
+  item_index: { type: Number, required: false, default: null },
+  item_text: { type: String, required: false, default: "" },
+  item_answer: { type: String, required: false, default: "" },
+  card_front: { type: String, required: false, default: "" },
+  card_back: { type: String, required: false, default: "" },
+  model_answer: { type: String, required: false, default: "" },
+
   // ─── أثر المعالجة ───────────────────────────────────────────────────────────
   status: {
     type: String,

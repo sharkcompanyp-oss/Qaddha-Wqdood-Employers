@@ -51,6 +51,7 @@ import { Get_Requests } from "../controllers/get_requests_controller.js";
 import { Reject_Request } from "../controllers/reject_request_controller.js";
 import { Accept_Request } from "../controllers/accept_request_controller.js";
 import { Get_Analytics } from "../controllers/analytics_controller.js";
+import { Get_Student_Plans } from "../controllers/get_student_plans_controller.js";
 import {
   Preview_Reset_College,
   Reset_College,
@@ -145,6 +146,8 @@ router.post("/getrequests", Get_Requests);
 router.delete("/rejectrequest", Reject_Request);
 router.post("/acceptrequest", Accept_Request);
 router.get("/analytics", Get_Analytics);
+// خطط طالب — للاطّلاع عند مطالبة استرداد
+router.post("/student/plans", Get_Student_Plans);
 // تصفير كلية في نهاية الفصل — الاشتراكات وحدها، بمعاينة وتأكيد صريح
 router.post("/analytics/reset-preview", Preview_Reset_College);
 router.post("/analytics/reset-college", Reset_College);

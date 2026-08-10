@@ -35,6 +35,7 @@ export const Accept_Request = async (req, res) => {
 
     The_Request.status = "accepted";
     The_Request.our_notes = our_notes || "";
+    The_Request.accepted_at = new Date();
     await The_Request.save();
 
     // إبلاغ باك اند الطلاب: بث فوري بالسوكيت (إن كان التطبيق مفتوحاً) + إشعار FCM
