@@ -29,21 +29,8 @@ const COMPLAINT_SCHEMA = mongoose.Schema({
   card_back: { type: String, required: false, default: "" },
   model_answer: { type: String, required: false, default: "" },
 
-  // ─── أثر المعالجة ───────────────────────────────────────────────────────────
-  status: {
-    type: String,
-    enum: ["new", "valid", "invalid", "fixed"],
-    default: "new",
-  },
-  // ما غيّره الوكيل فعلاً — سجلٌّ يُراجَع، فالتعديل الآلي بلا أثرٍ خطر
-  applied_fix: {
-    kind: { type: String, default: "" }, // question | option | summary | flash | written | curriculum
-    field: { type: String, default: "" },
-    before: { type: String, default: "" },
-    after: { type: String, default: "" },
-    at: { type: Date, default: null },
-  },
-  points_awarded: { type: Number, default: 0 },
+  // الشكوى المعالَجة تُحذف — الصندوق قائمةُ عملٍ لا أرشيف. أثر ما غيّره
+  // الوكيل في المحتوى يُحفظ في AgentFixLog (models/agent_fix_log.js).
   created_at: { type: Date, default: Date.now },
 });
 

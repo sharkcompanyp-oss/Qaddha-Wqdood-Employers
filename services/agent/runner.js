@@ -14,6 +14,7 @@ import complaint from "../../models/complaint.js";
 import Subject from "../../models/exam.js";
 import { callExamsBackend } from "../../config/exams_backend.js";
 import AgentSetting from "../../models/agent_setting.js";
+import AgentFixLog from "../../models/agent_fix_log.js";
 import * as judge from "./judge.js";
 import { norm } from "./lectures.js";
 import { awardPointsTo } from "../../controllers/award_points_controller.js";
@@ -312,7 +313,11 @@ async function awardPoints(studentID) {
 
 // ── إشعار الطالب + إغلاق الشكوى ──────────────────────────────────────────────
 
-async function notifyAndClose(c, reply, { awarded = 0, fixRecord = null } = {}) {
+async function notifyAndClose(
+  c,
+  reply,
+  { awarded = 0, fixRecord = null, meta = {} } = {},
+) {
   const body = awarded
     ? `${reply || "شكراً لتنبيهك 💜"}\n\n🎁 +${awarded} نقطة لأن ملاحظتك كانت صحيحة`
     : reply || "شكراً لتنبيهك 💜";
@@ -327,23 +332,45 @@ async function notifyAndClose(c, reply, { awarded = 0, fixRecord = null } = {}) 
     return { notified: false, note: `notify failed: ${sent.error || sent.status}` };
   }
 
-  // الشكوى المصحَّحة تبقى بأثرها لا تُحذف: التعديل الآلي بلا سجلٍّ يُراجَع خطر
+  // الأثر يُحفظ في سجلٍّ منفصل ثم تُحذف الشكوى.
+  // كانت تبقى بحالة "fixed" فتتراكم في صندوق الشكاوى — والصندوق قائمةُ
+  // عملٍ لا أرشيف: ما عولج يجب أن يغادره. أمّا ما غيّره الوكيل في المحتوى
+  // فيبقى في AgentFixLog، فتعرف دائماً أين تغيّر النصّ ولماذا وكيف تعيده.
   if (fixRecord) {
-    await complaint.updateOne(
-      { _id: c._id },
-      {
-        $set: {
-          status: "fixed",
-          applied_fix: { ...fixRecord, at: new Date() },
-          points_awarded: awarded,
-        },
-      },
-    );
-    return { notified: true, note: "تم التصحيح والإشعار — الشكوى محفوظة بأثرها" };
+    try {
+      await AgentFixLog.create({
+        complaint_id: String(c._id),
+        student_ID: String(c.student_ID || ""),
+        type: c.type,
+        subject_id: String(meta.subject_id || ""),
+        subject_name: c.subject_name || "",
+        lecture_id: String(meta.lecture_id || ""),
+        lecture_name: meta.lecture_name || c.lecture_name || "",
+        path: meta.path || "",
+        kind: fixRecord.kind,
+        field: fixRecord.field,
+        before: fixRecord.before,
+        after: fixRecord.after,
+        evidence: meta.evidence || "",
+        student_reply: reply || "",
+        confidence: Number(meta.confidence) || 0,
+        model: meta.model || "",
+        points_awarded: awarded,
+      });
+    } catch (err) {
+      // فشل التسجيل لا يُبقي الشكوى معلّقة — التصحيح والإشعار تمّا فعلاً.
+      // نطبعه ليُرى في سجلّ الخادم بدل أن يمرّ صامتاً.
+      console.error("تعذّر حفظ أثر التصحيح:", err.message);
+    }
   }
 
   await complaint.deleteOne({ _id: c._id });
-  return { notified: true, note: "student notified, complaint deleted" };
+  return {
+    notified: true,
+    note: fixRecord
+      ? "صُحّح وأُشعر الطالب — الشكوى أُغلقت وأثرها في سجلّ التصحيحات"
+      : "student notified, complaint deleted",
+  };
 }
 
 // ── معالجة شكوى واحدة ────────────────────────────────────────────────────────
@@ -454,6 +481,16 @@ async function processOne(c, cfg, ctx) {
     const side = await notifyAndClose(c, verdict.student_reply, {
       awarded,
       fixRecord,
+      // سياق التصحيح للسجلّ: أين وقع، وبأيّ شاهد، وبأي نموذج
+      meta: {
+        subject_id: String(subject._id),
+        lecture_id: lecture.lecture_id,
+        lecture_name: lecture.name || lecture.title || "",
+        path: target.path,
+        evidence: verdict.evidence || "",
+        confidence: verdict.confidence,
+        model: ctx?.model || "",
+      },
     });
     return {
       ...withV,
@@ -516,7 +553,10 @@ export async function runAgent({ overrides = {} } = {}) {
   };
 
   // الشكاوى المعالَجة لا تُعاد معالجتها
-  const query = complaint.find({ status: { $in: [null, "new"] } });
+  // كل شكوى موجودة = غير معالَجة. المعالَجة تُحذف وأثرها في AgentFixLog،
+  // فلا حاجة لفلترٍ على الحالة — وكان يخاطر بتخطّي شكاوى لو ضُبط status
+  // لأي سببٍ آخر.
+  const query = complaint.find({});
   if (cfg.limit) query.limit(cfg.limit);
   const complaints = await query.exec();
 
