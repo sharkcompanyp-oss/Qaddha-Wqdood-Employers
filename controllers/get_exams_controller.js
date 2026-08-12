@@ -102,9 +102,33 @@ export const Get_Exams_Names = async (req, res) => {
           visible: 1,
           moadal_available: 1,
           employer: 1,
-          questions_count: { $size: { $ifNull: ["$questions", []] } },
+          // الأعداد تُشتقّ من المحاضرات بعد توحيد الهيكل. كانت تُحسب من
+          // `$questions` و`$summary` على مستوى المادة — وقد حُذفا بالهجرة،
+          // فصار كل عدّاد صفراً في كل مادة بلا أن يظهر خطأ.
+          questions_count: {
+            $sum: {
+              $map: {
+                input: { $ifNull: ["$lectures", []] },
+                as: "l",
+                in: { $size: { $ifNull: ["$$l.questions", []] } },
+              },
+            },
+          },
           lectures_count: { $size: { $ifNull: ["$lectures", []] } },
-          summary_count: { $size: { $ifNull: ["$summary", []] } },
+          summary_count: {
+            $size: {
+              $filter: {
+                input: { $ifNull: ["$lectures", []] },
+                as: "l",
+                cond: {
+                  $gt: [
+                    { $size: { $ifNull: ["$$l.summary.sections", []] } },
+                    0,
+                  ],
+                },
+              },
+            },
+          },
           students_count: { $size: { $ifNull: ["$available_to", []] } },
         },
       },
