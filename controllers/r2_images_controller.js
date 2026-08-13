@@ -11,8 +11,10 @@ dotenv.config();
 // ─── رفع صور المحاضرات إلى Cloudflare R2 ──────────────────────────────────────
 // منقول عن r2_images.py بأمانة، مع تقسيمٍ مختلف للعمل:
 //
-//   المتصفّح: يرشّح الصور ويضغطها (canvas) — لأنه يملكها أصلاً من Mistral،
-//             وإرسال الخام يضاعف الحمولة بلا فائدة.
+//   الواجهة: تضغط الصور إن استطاعت (canvas في المتصفّح) — لأنها تملكها
+//             أصلاً من Mistral. لوحة الهاتف بلا canvas فترفعها خاماً.
+//             **ولا ترشيح في أيّهما**: كل صورة تُرفَع، وحذفها شأن المحرِّر
+//             في خطوة المعاينة.
 //   الخادم:   يبصم ويرفع — لأن مفاتيح R2 سرّية ولا يجوز أن تصل المتصفّح.
 //             (مفتاح Mistral وحده في الواجهة، وهو يتجدّد كل ساعة فليس سرّاً.)
 //
@@ -59,6 +61,23 @@ export const safeSubject = (s) =>
     .slice(0, 40)
     .trim();
 
+/** يستنتج نوع الصورة من بصمتها لا من امتدادها.
+ *
+ *  كانت كل صورة تُخزَّن `.jpg` بنوع `image/jpeg` — وكان ذلك صحيحاً ما دامت
+ *  اللوحة تمرّرها على canvas فتخرج JPEG دائماً. الهاتف لا يملك canvas فيرفعها
+ *  خاماً كما عادت من Mistral، وقد تكون PNG. تسميتها jpg عندها تجعل التخزين
+ *  يكذب على القارئ، وبعض العملاء يرفض عرضها. */
+const sniffImage = (buf) => {
+  if (buf.length > 8 && buf[0] === 0x89 && buf.toString("latin1", 1, 4) === "PNG")
+    return { ext: "png", type: "image/png" };
+  if (buf.length > 12 && buf.toString("latin1", 0, 4) === "RIFF" && buf.toString("latin1", 8, 12) === "WEBP")
+    return { ext: "webp", type: "image/webp" };
+  if (buf.length > 3 && buf.toString("latin1", 0, 3) === "GIF")
+    return { ext: "gif", type: "image/gif" };
+  // الافتراضي JPEG: هو ما يعيده Mistral في الغالب وما ينتجه canvas دائماً
+  return { ext: "jpg", type: "image/jpeg" };
+};
+
 export const Upload_Lecture_Images = async (req, res) => {
   try {
     const { PASSWORD, subject, images } = req.body || {};
@@ -104,7 +123,8 @@ export const Upload_Lecture_Images = async (req, res) => {
           .update(data)
           .digest("hex")
           .slice(0, 16);
-        const key = `lectures/${subj}/${digest}.jpg`;
+        const { ext, type } = sniffImage(data);
+        const key = `lectures/${subj}/${digest}.${ext}`;
 
         let exists = false;
         try {
@@ -122,7 +142,7 @@ export const Upload_Lecture_Images = async (req, res) => {
               Bucket: bucket,
               Key: key,
               Body: data,
-              ContentType: "image/jpeg",
+              ContentType: type,
               CacheControl: "public, max-age=31536000, immutable",
             }),
           );

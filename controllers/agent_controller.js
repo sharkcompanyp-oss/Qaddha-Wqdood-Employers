@@ -34,6 +34,10 @@ export const Get_Agent_Config = async (req, res) => {
         dry_run: setting.dry_run,
         threshold: setting.threshold,
         limit: setting.limit,
+        // كانت محذوفة من الإسقاط: الواجهة تقرأ منه، فكانت قائمة الأمثلة
+        // تعود فارغةً بعد كل تحديث للصفحة وإن كانت محفوظة فعلاً — ثم يمحوها
+        // أوّل «حفظ» لأن الواجهة ترسل ما تراه.
+        reply_examples: setting.reply_examples || [],
       },
       available_models,
       lecture_count: lectureCount,
