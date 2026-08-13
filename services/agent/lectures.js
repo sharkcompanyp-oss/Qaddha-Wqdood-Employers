@@ -5,6 +5,7 @@
 
 import LectureText from "../../models/lecture_text.js";
 import { askText, extractJson } from "./provider.js";
+import { renderPrompt } from "../prompts.js";
 
 export const ALL_SECTIONS = ["طب أسنان", "تجميل"];
 
@@ -62,12 +63,10 @@ export async function pickSubjectFolder(subjectName, folders, ctx) {
   const nSubj = norm(subjectName);
   for (const f of folders) if (norm(f) === nSubj) return f;
 
-  const prompt =
-    "أنت تساعد في إيجاد مجلد المادة الصحيح. اسم المادة في الشكوى قد لا يطابق اسم " +
-    "المجلد حرفياً. اختر المجلد الأنسب من القائمة أو أعد null.\n\n" +
-    `اسم المادة في الشكوى: ${subjectName}\n\nالمجلدات المتاحة:\n` +
-    folders.map((n) => `- ${n}`).join("\n") +
-    '\n\nأعد JSON فقط: {"folder": "الاسم أو null"}';
+  const prompt = await renderPrompt("agent_pick_subject", {
+    subject: subjectName,
+    folders: folders.map((n) => `- ${n}`).join("\n"),
+  });
   try {
     const out = extractJson(await askText({ ...ctx, prompt }));
     const folder = out.folder;
@@ -128,16 +127,11 @@ export async function pickLecture(lectureName, index, ctx, claim = "") {
     .map((it, i) => `[${i}] الملف: ${it.file}\n    مقتطف: ${it.preview.slice(0, 500)}`)
     .join("\n\n");
 
-  const prompt =
-    "مهمتك: اختيار المحاضرة التي يتحدّث عنها الطالب في شكواه، من قائمة محاضرات المادة.\n" +
-    "مهم: اسم المحاضرة في الشكوى قد لا يُذكر حرفياً في الملف أو مقتطفه — استدلّ بذكاء " +
-    "من الموضوع العام لكل محاضرة (من المقتطف) ومن نص شكوى الطالب. اختر الأقرب موضوعياً.\n" +
-    "اختر رقماً دائماً إن وُجد أي احتمال معقول؛ لا تُعد null إلا إذا كان الموضوع لا " +
-    "يمتّ بصلة لأي محاضرة إطلاقاً.\n\n" +
-    `اسم المحاضرة في الشكوى: ${lectureName || "(غير محدّد)"}\n` +
-    `نص شكوى الطالب: ${claim || "(غير متوفر)"}\n\n` +
-    `محاضرات المادة:\n${listing}\n\n` +
-    'أعد JSON فقط: {"index": رقم المحاضرة الأنسب, "confidence": 0..1}';
+  const prompt = await renderPrompt("agent_pick_lecture", {
+    lecture: lectureName || "(غير محدّد)",
+    claim: claim || "(غير متوفر)",
+    listing,
+  });
 
   try {
     const out = extractJson(await askText({ ...ctx, prompt }));

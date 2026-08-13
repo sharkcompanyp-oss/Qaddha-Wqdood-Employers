@@ -41,6 +41,11 @@ import {
 } from "../controllers/spellcheck_controller.js";
 import { Generate_Items } from "../controllers/generate_controller.js";
 import {
+  Get_Prompts,
+  Reset_Prompts,
+  Update_Prompts,
+} from "../controllers/prompts_controller.js";
+import {
   Transcribe_Models,
   Transcribe_Status,
   Transcribe_Run,
@@ -134,6 +139,12 @@ router.post("/production/r2-status", R2_Status);
 router.post("/production/upload-images", bigBody, Upload_Lecture_Images);
 router.post("/production/mistral-upload", bigBody, Mistral_Upload);
 router.post("/production/mistral-ocr", Mistral_Ocr);
+// ── الموجّهات ──
+// نصّ كل وكيل معروضٌ ومحرَّرٌ من اللوحة، فلا يبقى موجّهٌ محبوسٌ في الكود.
+router.post("/prompts", Get_Prompts);
+router.post("/prompts/update", bigBody, Update_Prompts);
+router.post("/prompts/reset", Reset_Prompts);
+
 router.post("/production/gemini-models", Gemini_Models);
 router.post("/production/spellcheck", Spellcheck_Chunk);
 router.post("/production/generate", bigBody, Generate_Items);

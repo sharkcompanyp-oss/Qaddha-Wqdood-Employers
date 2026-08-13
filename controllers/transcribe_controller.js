@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import { getPrompt } from "../services/prompts.js";
 
 dotenv.config();
 
@@ -28,23 +29,6 @@ const GEMINI = "https://generativelanguage.googleapis.com/v1beta";
 // القابل للاستئناف — يردّ بلا ترويسة x-goog-upload-url، فيبدو العطل
 // «تعذّر بدء الرفع» بلا سبب ظاهر.
 const GEMINI_UPLOAD = "https://generativelanguage.googleapis.com/upload/v1beta";
-
-const DEFAULT_PROMPT = `فرّغ هذا التسجيل الصوتي إلى نصّ عربي مكتوب بدقة عالية، وأخرجه بصيغة ماركداون.
-
-التعليمات:
-- اكتب النصّ كاملاً كما هو منطوق دون تلخيص أو حذف.
-- استخدم علامات الترقيم المناسبة وقسّم النصّ إلى فقرات مترابطة.
-- صحّح الأخطاء اللفظية البسيطة والتلعثم واحذف الكلمات المكرّرة بلا داعٍ.
-- اكتب المصطلحات العلمية والأجنبية بشكلها الصحيح.
-
-تنسيق الماركداون:
-- عنوان المحاضرة بـ# إن ذُكر في التسجيل.
-- كل محور رئيسي بـ## وما تفرّع عنه بـ###.
-- التعدادات التي ينطقها المحاضر («أولاً… ثانياً…») اكتبها قوائم بـ-.
-- الكلمة التي يشدّد عليها أو يقول «هذا مهم» اجعلها **غامقة**.
-- إن أملى جدولاً أو مقارنة، اكتبها جدول ماركداون.
-
-لا تضف أي تعليق أو مقدّمة أو خاتمة من عندك — أخرج النصّ المفرّغ وحده.`;
 
 const SKIP = ["-tts", "-image", "image-", "embedding", "gemma", "lyria", "veo", "imagen"];
 
@@ -209,7 +193,9 @@ export const Transcribe_Run = async (req, res) => {
     if (!model) return res.status(400).json({ message: "لم يُحدَّد النموذج" });
 
     const use = String(model).replace(/^models\//, "");
-    const text = String(prompt || "").trim() || DEFAULT_PROMPT;
+    // تعليمات النافذة تسبق، فإن تُركت فارغةً فموجّه اللوحة
+    const text =
+      String(prompt || "").trim() || (await getPrompt("transcribe_main"));
 
     // مهلة صريحة: الاتصال المعلَّق بلا حدّ يستهلك عاملاً على الخادم إلى الأبد
     const ac = new AbortController();
@@ -297,4 +283,3 @@ export const Transcribe_Cleanup = async (req, res) => {
   }
 };
 
-export { DEFAULT_PROMPT };
