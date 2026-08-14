@@ -5,6 +5,7 @@ import {
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
 import dotenv from "dotenv";
+import { allowTool } from "../services/access.js";
 
 dotenv.config();
 
@@ -80,10 +81,8 @@ const sniffImage = (buf) => {
 
 export const Upload_Lecture_Images = async (req, res) => {
   try {
-    const { PASSWORD, subject, images } = req.body || {};
-    if (!PASSWORD || PASSWORD !== process.env.PASSWORD) {
-      return res.status(401).json({ message: "غير مصرّح" });
-    }
+    const { subject, images } = req.body || {};
+    if (!(await allowTool(req, res))) return;
     if (!R2_READY()) {
       // لا نُفشل المسح كلّه: النصّ أهمّ من الصور، والمتصفّح يُكمل بلا روابط.
       return res.status(200).json({
@@ -175,10 +174,7 @@ export const Upload_Lecture_Images = async (req, res) => {
 /** فحص جاهزية R2 — تعرضه الواجهة قبل بدء المسح فلا يكتشف المستخدم
  *  غياب الإعداد بعد أربعين دقيقة من المسح. */
 export const R2_Status = async (req, res) => {
-  const { PASSWORD } = req.body || {};
-  if (!PASSWORD || PASSWORD !== process.env.PASSWORD) {
-    return res.status(401).json({ message: "غير مصرّح" });
-  }
+  if (!(await allowTool(req, res))) return;
   return res.status(200).json({
     ready: R2_READY(),
     bucket: R2_READY() ? process.env.R2_BUCKET : null,

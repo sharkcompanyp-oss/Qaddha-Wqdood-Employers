@@ -1,5 +1,6 @@
 import Exams from "../models/exam.js";
 import dotenv from "dotenv";
+import { allowSubject } from "../services/access.js";
 
 dotenv.config();
 
@@ -67,7 +68,7 @@ const recomputeMoadal = (exam) => {
 
 export const Save_Lecture_V2 = async (req, res) => {
   try {
-    if (!guard(req, res)) return;
+    if (!(await allowSubject(req, res, req.body?._id))) return;
     const { _id, lecture_id, payload = {} } = req.body;
     if (!_id) return res.status(400).json({ message: "رمز المادة ناقص" });
     if (!lecture_id) return res.status(400).json({ message: "رمز المحاضرة ناقص" });
@@ -190,7 +191,7 @@ export const Save_Lecture_V2 = async (req, res) => {
 /** إضافة محاضرة أو حذفها أو إعادة ترتيبها — بلا مساس بمحتوى الباقي */
 export const Manage_Lectures_V2 = async (req, res) => {
   try {
-    if (!guard(req, res)) return;
+    if (!(await allowSubject(req, res, req.body?._id))) return;
     const { _id, action, lecture_id, name, order } = req.body;
     if (!_id) return res.status(400).json({ message: "رمز المادة ناقص" });
 

@@ -1,4 +1,5 @@
 import PromptSetting from "../models/prompt_setting.js";
+import { allowTool } from "../services/access.js";
 import {
   bustPromptCache,
   NUMBER_DEFAULTS,
@@ -22,7 +23,9 @@ const guard = (req, res) => {
 
 /** كل الموجّهات والأعداد: القيمة الحالية والافتراضية ووصف كلٍّ منها */
 export const Get_Prompts = async (req, res) => {
-  if (!guard(req, res)) return;
+  // القراءة تكفيها عضوية: الأعضاء يحتاجون حجم الدفعة قبل التدقيق.
+  // أمّا الحفظ والإعادة فللّوحة وحدها.
+  if (!(await allowTool(req, res))) return;
   try {
     return res.status(200).json(await readAll());
   } catch (e) {

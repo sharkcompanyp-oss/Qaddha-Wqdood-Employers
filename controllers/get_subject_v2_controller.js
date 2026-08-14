@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Exams from "../models/exam.js";
 import dotenv from "dotenv";
+import { allowSubject, isPanel, employerOf } from "../services/access.js";
 
 dotenv.config();
 
@@ -106,6 +107,9 @@ const SCOPES = {
 
 export const Get_Subject_V2 = async (req, res) => {
   try {
+    // قراءة مادةٍ بعينها: اللوحة تفتح كل شيء، والعضو لا يبلغ إلا ما استُلم
+    // له. الفحص هنا لا في الواجهة — ترشيح القائمة راحةُ عرضٍ لا حراسة.
+    if (!(await allowSubject(req, res, req.body?._id))) return;
     const { _id, scope = "list", lecture_id } = req.body || {};
     if (!_id) return res.status(400).json({ message: "معرّف المادة مطلوب" });
     if (!mongoose.isValidObjectId(_id)) {
@@ -185,11 +189,16 @@ export const Get_Subject_V2 = async (req, res) => {
 /** أسماء مواد كلية — بلا أي محتوى، للقائمة وحدها */
 export const Get_Subjects_List_V2 = async (req, res) => {
   try {
-    const { PASSWORD, college_id } = req.body || {};
-    if (!PASSWORD || PASSWORD !== process.env.PASSWORD) {
+    const { college_id } = req.body || {};
+    const panel = isPanel(req);
+    const emp = panel ? null : await employerOf(req);
+    if (!panel && !emp) {
       return res.status(401).json({ message: "غير مصرّح" });
     }
+
     const match = {};
+    // العضو يرى المسلَّم له وحده — القيد في الاستعلام لا بعده
+    if (emp) match.employer = String(emp._id);
     if (college_id !== undefined && college_id !== null && college_id !== "") {
       const n = Number(college_id);
       match.college_id = Number.isNaN(n)

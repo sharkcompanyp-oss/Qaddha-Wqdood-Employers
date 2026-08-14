@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import { renderPrompt } from "../services/prompts.js";
+import { allowTool } from "../services/access.js";
 
 dotenv.config();
 
@@ -78,7 +79,7 @@ const fitText = (text, max = 120000) => {
 
 export const Generate_Items = async (req, res) => {
   try {
-    if (!guard(req, res)) return;
+    if (!(await allowTool(req, res))) return;
     const key = process.env.GEMINI_API_KEY;
     if (!key) {
       return res

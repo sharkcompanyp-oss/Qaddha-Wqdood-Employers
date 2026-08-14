@@ -1,6 +1,7 @@
 import Exams from "../models/exam.js";
 import LectureText from "../models/lecture_text.js";
 import { recomputeMoadalAvailability } from "../services/moadal_eligibility.js";
+import { allowSubject } from "../services/access.js";
 
 // ─── أدوات مساعدة ─────────────────────────────────────────────────────────────
 

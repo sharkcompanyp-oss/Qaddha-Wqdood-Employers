@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import { getPrompt } from "../services/prompts.js";
+import { allowTool } from "../services/access.js";
 
 dotenv.config();
 
@@ -42,7 +43,7 @@ const defaultModel = () =>
  *  مكتوبة يدوياً تتقادم. */
 export const Gemini_Models = async (req, res) => {
   try {
-    if (!guard(req, res)) return;
+    if (!(await allowTool(req, res))) return;
     const key = process.env.GEMINI_API_KEY;
     if (!key) {
       return res
@@ -98,7 +99,7 @@ const extractJson = (text) => {
  *  التقدّم وتديره؛ الخادم يخدم طلباً واحداً في كل مرة. */
 export const Spellcheck_Chunk = async (req, res) => {
   try {
-    if (!guard(req, res)) return;
+    if (!(await allowTool(req, res))) return;
     const key = process.env.GEMINI_API_KEY;
     if (!key) {
       return res

@@ -1,6 +1,7 @@
 import Exams from "../models/exam.js";
 import { recomputeMoadalAvailability } from "../services/moadal_eligibility.js";
 import dotenv from "dotenv";
+import { allowSubject } from "../services/access.js";
 
 dotenv.config();
 
@@ -39,7 +40,7 @@ const ownedQuestionIndices = (doc, lectureId, groupName) => {
 
 export const Save_Part = async (req, res) => {
   try {
-    if (!guard(req, res)) return;
+    if (!(await allowSubject(req, res, req.body?._id))) return;
 
     const { _id, lecture_id, part = "all", payload = {} } = req.body;
 

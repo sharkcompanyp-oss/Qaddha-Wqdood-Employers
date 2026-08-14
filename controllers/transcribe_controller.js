@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import { getPrompt } from "../services/prompts.js";
+import { allowTool, employerOf } from "../services/access.js";
 
 dotenv.config();
 
@@ -53,7 +54,7 @@ const keyOr503 = (res) => {
 /** النماذج التي تقبل الصوت */
 export const Transcribe_Models = async (req, res) => {
   try {
-    if (!guard(req, res)) return;
+    if (!(await allowTool(req, res))) return;
     const key = process.env.GEMINI_API_KEY;
     if (!key) return res.status(200).json({ ready: false, models: [] });
 
@@ -82,10 +83,15 @@ export const Transcribe_Models = async (req, res) => {
 export const Transcribe_Upload = async (req, res) => {
   try {
     // الحارس من الترويسة لا من الجسم: الجسم هنا بايتات صوت لا JSON
-    if (
-      !req.headers["x-panel-password"] ||
-      req.headers["x-panel-password"] !== process.env.PASSWORD
-    ) {
+    // الحارس من الترويسة لا من الجسم: الجسم هنا بايتات صوت لا JSON.
+    // بابان: كلمة اللوحة، أو عضوٌ مسجَّل يرسل معرّفه في ترويسته.
+    const byPanel =
+      req.headers["x-panel-password"] &&
+      req.headers["x-panel-password"] === process.env.PASSWORD;
+    const byEmployer = byPanel
+      ? null
+      : await employerOf({ body: { employer_id: req.headers["x-employer-id"] } });
+    if (!byPanel && !byEmployer) {
       return res.status(401).json({ message: "غير مصرّح" });
     }
     const key = keyOr503(res);
@@ -161,7 +167,7 @@ export const Transcribe_Upload = async (req, res) => {
 /** ٢) حالة الملف بعد الرفع — Google يعالجه قبل أن يصلح للاستعمال */
 export const Transcribe_Status = async (req, res) => {
   try {
-    if (!guard(req, res)) return;
+    if (!(await allowTool(req, res))) return;
     const key = keyOr503(res);
     if (!key) return;
 
@@ -184,7 +190,7 @@ export const Transcribe_Status = async (req, res) => {
  *  لكن الرد يستغرق دقائق لتسجيلٍ طويل. */
 export const Transcribe_Run = async (req, res) => {
   try {
-    if (!guard(req, res)) return;
+    if (!(await allowTool(req, res))) return;
     const key = keyOr503(res);
     if (!key) return;
 
@@ -268,7 +274,7 @@ export const Transcribe_Run = async (req, res) => {
 /** ٤) حذف الملف من خوادم Google — لا نترك تسجيلات المقرَّر عندهم */
 export const Transcribe_Cleanup = async (req, res) => {
   try {
-    if (!guard(req, res)) return;
+    if (!(await allowTool(req, res))) return;
     const key = keyOr503(res);
     if (!key) return;
     const { fileName } = req.body;

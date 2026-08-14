@@ -4,6 +4,7 @@
  */
 import Exams from "../models/exam.js";
 import dotenv from "dotenv";
+import { employerOf, isPanel } from "../services/access.js";
 
 dotenv.config();
 
@@ -50,8 +51,14 @@ const guard = (req, res) => {
  *  فنعيد المعرّفات والأعداد فقط ويطابقها العميل. */
 export const Get_Exams_Tree = async (req, res) => {
   try {
-    if (!guard(req, res)) return;
+    // العضو يرى كليّات موادّه وحدها: عدّادٌ يشمل موادّ غيره يعده بما لا يبلغه
+    const panel = isPanel(req);
+    const emp = panel ? null : await employerOf(req);
+    if (!panel && !emp) {
+      return res.status(401).json({ message: "غير مصرّح" });
+    }
     const rows = await Exams.aggregate([
+      ...(emp ? [{ $match: { employer: String(emp._id) } }] : []),
       { $group: { _id: "$college_id", count: { $sum: 1 } } },
       { $sort: { _id: 1 } },
     ]);
