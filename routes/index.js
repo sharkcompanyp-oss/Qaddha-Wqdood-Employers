@@ -45,6 +45,7 @@ import {
   Reset_Prompts,
   Update_Prompts,
 } from "../controllers/prompts_controller.js";
+import { Refresh_Moadal } from "../controllers/moadal_refresh_controller.js";
 import {
   Archive_Lecture,
   List_Archived,
@@ -153,6 +154,9 @@ router.post("/production/r2-status", R2_Status);
 router.post("/production/upload-images", bigBody, Upload_Lecture_Images);
 router.post("/production/mistral-upload", bigBody, Mistral_Upload);
 router.post("/production/mistral-ocr", Mistral_Ocr);
+// إعادة حساب أهلية «معدل» للمواد المحفوظة بالتعريف القديم
+router.post("/exams/refresh-moadal", Refresh_Moadal);
+
 // ── الأرشيف ──
 // المحاضرة تُنقل من المادة لا تُحذف: عمل إنتاجها لا يضيع لأن الدكتور
 // غيّر رأيه في منتصف الفصل.

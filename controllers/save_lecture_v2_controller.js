@@ -43,28 +43,10 @@ const summaryWords = (sections) => {
 const fourOptions = (o) =>
   Array.from({ length: 4 }, (_, i) => String((Array.isArray(o) ? o[i] : "") ?? ""));
 
-/** يعيد حساب أهلية «معدل»: كل محاضرة مكتملة الأنواع الخمسة.
- *  محلّياً داخل الكائن — بلا مطابقة أسماء كما كان. */
-const recomputeMoadal = (exam) => {
-  const ls = exam.lectures || [];
-  const was = Boolean(exam.moadal_available);
-  const now =
-    ls.length > 0 &&
-    ls.every(
-      (l) =>
-        String(l.curriculum?.text || "").trim() &&
-        (l.summary?.sections || []).length > 0 &&
-        (l.questions || []).length > 0 &&
-        (l.flash_cards || []).some(
-          (c) => String(c.front || "").trim() && String(c.back || "").trim(),
-        ) &&
-        (l.written_exam?.questions || []).some(
-          (q) => String(q.question || "").trim() && String(q.model_answer || "").trim(),
-        ),
-    );
-  exam.moadal_available = now;
-  return { was, now, changed: was !== now };
-};
+// أهلية «معدل» تُحسب في `services/moadal_eligibility.js` وحدها.
+// كان هنا تعريفٌ ثانٍ لها بالمنطق نفسه — وتعريفان للقاعدة الواحدة يعني أن
+// آخر مَن يحفظ يفوز، وهو ما جعل المادة المكتملة تعود `false` بعد حفظٍ جزئي.
+const recomputeMoadal = (exam) => recomputeMoadalAvailability(exam);
 
 export const Save_Lecture_V2 = async (req, res) => {
   try {
