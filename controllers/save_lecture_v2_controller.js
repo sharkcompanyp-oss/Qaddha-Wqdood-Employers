@@ -1,6 +1,7 @@
 import Exams from "../models/exam.js";
 import dotenv from "dotenv";
 import { allowSubject } from "../services/access.js";
+import { recomputeMoadalAvailability } from "../services/moadal_eligibility.js";
 
 dotenv.config();
 
