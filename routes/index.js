@@ -46,6 +46,20 @@ import {
   Update_Prompts,
 } from "../controllers/prompts_controller.js";
 import {
+  Archive_Lecture,
+  List_Archived,
+  Restore_Lecture,
+} from "../controllers/archive_controller.js";
+import {
+  Get_App_Release,
+  Update_App_Release,
+} from "../controllers/app_release_controller.js";
+import {
+  Logs_Delete,
+  Logs_Fetch,
+  Logs_Summary,
+} from "../controllers/logs_controller.js";
+import {
   Transcribe_Models,
   Transcribe_Status,
   Transcribe_Run,
@@ -139,6 +153,24 @@ router.post("/production/r2-status", R2_Status);
 router.post("/production/upload-images", bigBody, Upload_Lecture_Images);
 router.post("/production/mistral-upload", bigBody, Mistral_Upload);
 router.post("/production/mistral-ocr", Mistral_Ocr);
+// ── الأرشيف ──
+// المحاضرة تُنقل من المادة لا تُحذف: عمل إنتاجها لا يضيع لأن الدكتور
+// غيّر رأيه في منتصف الفصل.
+router.put("/archive/lecture", Archive_Lecture);
+router.put("/archive/restore", Restore_Lecture);
+router.post("/archive/list", List_Archived);
+
+// ── إعلان تحديث التطبيق ──
+// القراءة مفتوحة: يستدعيها تطبيق الطالب وهو لا يملك كلمة اللوحة.
+router.get("/app/release", Get_App_Release);
+router.post("/app/release/update", Update_App_Release);
+
+// ── السجلات ──
+// لا يُجلب شيء بمجرّد فتح التبويب: كل سجلّ بطلبٍ صريح.
+router.post("/logs/summary", Logs_Summary);
+router.post("/logs/fetch", Logs_Fetch);
+router.post("/logs/delete", Logs_Delete);
+
 // ── الموجّهات ──
 // نصّ كل وكيل معروضٌ ومحرَّرٌ من اللوحة، فلا يبقى موجّهٌ محبوسٌ في الكود.
 router.post("/prompts", Get_Prompts);
