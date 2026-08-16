@@ -1,16 +1,24 @@
 import ArchivedLecture from "../models/archived_lecture.js";
 import Exams from "../models/exam.js";
-import { allowSubject, isPanel } from "../services/access.js";
+import { isPanel } from "../services/access.js";
 
 // ─── أرشفة المحاضرات واستعادتها ───────────────────────────────────────────────
 // نقلٌ لا حذف: المحاضرة تخرج من المادة بكامل محتواها إلى مجموعة مستقلة،
 // وتعود منها بضغطة زرّ. عملُ إنتاجها لا يضيع لأن الدكتور غيّر رأيه.
+//
+// ── للّوحة وحدها ──
+// ليست من صلاحيات العضو: هي قرارُ مقرِّرٍ على بنية المادة لا عملُ إنتاج.
+// و`allowSubject` وحدها لا تكفي هنا — فهي تقبل العضو الذي **استُلمت له**
+// المادة، وتطبيق الأعضاء لا يعرض الزرّ لكنّ الحدّ يجب أن يكون في الخادم
+// لا في إخفاء زرّ.
 
 /** يؤرشف محاضرة: تُنقل من المادة إلى مجموعة الأرشيف */
 export const Archive_Lecture = async (req, res) => {
   try {
     const { _id, lecture_id } = req.body || {};
-    if (!(await allowSubject(req, res, _id))) return;
+    if (!isPanel(req)) {
+      return res.status(401).json({ message: "الأرشفة من صلاحيات اللوحة وحدها" });
+    }
     if (!_id) return res.status(400).json({ message: "رمز المادة ناقص" });
     if (!lecture_id)
       return res.status(400).json({ message: "رمز المحاضرة ناقص" });
@@ -73,7 +81,9 @@ export const Restore_Lecture = async (req, res) => {
     const row = await ArchivedLecture.findById(archive_id).lean();
     if (!row) return res.status(404).json({ message: "غير موجود في الأرشيف" });
 
-    if (!(await allowSubject(req, res, row.subject_id))) return;
+    if (!isPanel(req)) {
+      return res.status(401).json({ message: "الاستعادة من صلاحيات اللوحة وحدها" });
+    }
 
     const exam = await Exams.findById(row.subject_id);
     if (!exam)
