@@ -13,6 +13,9 @@ dotenv.config();
 // أهمّ من الاختصار لأن المستخدم يراجع كل كلمة قبل التطبيق.
 
 const GEMINI = "https://generativelanguage.googleapis.com/v1beta";
+// سقف انتظار ردّ Gemini للدفعة الواحدة — أقصر من مهلة الواجهة (١٨٠ث)
+// كي يصل الخطأ من الخادم بدل أن تنقطع الواجهة من طرفها.
+const GEMINI_TIMEOUT_MS = 150000;
 
 // الموجّه منقول حرفياً عن spellcheck.py — كل جملة فيه ثمنُ خطأٍ وقع سابقاً
 /** سجلّ التصحيحات المقبولة سابقاً، بترويسته من مخزن الموجّهات.
@@ -112,9 +115,16 @@ export const Spellcheck_Chunk = async (req, res) => {
     }
 
     const use = String(model || defaultModel()).replace(/^models\//, "");
-    const r = await fetch(
+    // مهلةٌ صريحة: fetch بلا إشارة إجهاض ينتظر إلى الأبد إن لم يردّ Gemini،
+    // فيبقى طلب الواجهة معلّقاً ويظهر «جارٍ التدقيق» ساعاتٍ بلا خطأ ولا نتيجة.
+    const ac = new AbortController();
+    const killer = setTimeout(() => ac.abort(), GEMINI_TIMEOUT_MS);
+    let r;
+    try {
+      r = await fetch(
       `${GEMINI}/models/${use}:generateContent?key=${key}`,
       {
+        signal: ac.signal,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -137,7 +147,17 @@ export const Spellcheck_Chunk = async (req, res) => {
           },
         }),
       },
-    );
+      );
+    } catch (e) {
+      if (e?.name === "AbortError") {
+        return res.status(504).json({
+          message: `لم يردّ النموذج خلال ${GEMINI_TIMEOUT_MS / 1000} ثانية — جرّب نموذجاً أسرع أو صغّر حجم الدفعة`,
+        });
+      }
+      throw e;
+    } finally {
+      clearTimeout(killer);
+    }
 
     const raw = await r.text();
     if (!r.ok) {
