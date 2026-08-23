@@ -1,3 +1,5 @@
+import mongoose from "mongoose";
+
 // ─── أهلية خطة «معدل» ─────────────────────────────────────────────────────────
 // مصدر واحد للحقيقة: المادة مؤهلة إن كانت كل محاضراتها مكتملة الأنواع الخمسة
 // (نصّ المقرَّر + ملخّص + أسئلة + بطاقات + تحريري).
@@ -95,4 +97,87 @@ export const recomputeMoadalAvailability = (exam) => {
   const was = exam.moadal_available === true;
   exam.moadal_available = now;
   return { changed: was !== now, was, now, report, missing: missingFromReport(report) };
+};
+
+// ─── الحساب داخل القاعدة ──────────────────────────────────────────────────────
+// النسخة أعلاه تحتاج وثيقة المادة كاملةً في الذاكرة — وهي ثقيلة: نصّ المقرَّر
+// وحده قد يبلغ مئات الكيلوبايتات لكل محاضرة، فمادةٌ من أربعين محاضرة تُنقل
+// كلّها على السلك لتُقرأ منها **خمسة أعداد** لكل محاضرة.
+//
+// هذه تحسبها في القاعدة وتُرجع الأعلام وحدها (عشرات البايتات مهما كبرت
+// المادة) — بالمنطق نفسه حرفاً بحرف: نصٌّ غير فارغ، وأقسام ملخّص، وأسئلة
+// بنصّ، وبطاقات بوجهين، وتحريريٌّ بسؤالٍ وجواب نموذجي.
+//
+// $trim يطابق `String(x).trim()` في جافاسكربت لمسافات ASCII والسطور،
+// وهو ما تفحصه النسخة أعلاه.
+const nonEmpty = (expr) => ({
+  $gt: [{ $strLenCP: { $trim: { input: { $ifNull: [expr, ""] } } } }, 0],
+});
+
+const toObjectId = (v) =>
+  typeof v === "string" ? mongoose.Types.ObjectId.createFromHexString(v) : v;
+
+/** يقرأ تقرير الاكتمال من القاعدة بلا نقل أي محتوى. */
+export const readCompletenessFromDb = async (Model, subjectId) => {
+  const rows = await Model.aggregate([
+    // التحويل صريح: $match لا يُلقّم النصّ إلى ObjectId تلقائياً كما يفعل find
+    { $match: { _id: toObjectId(subjectId) } },
+    { $project: { lectures: { $ifNull: ["$lectures", []] } } },
+    { $unwind: { path: "$lectures", preserveNullAndEmptyArrays: false } },
+    {
+      $project: {
+        lecture_id: "$lectures.lecture_id",
+        title: { $ifNull: ["$lectures.name", { $ifNull: ["$lectures.title", ""] }] },
+        has_text: nonEmpty("$lectures.curriculum.text"),
+        has_summary: {
+          $gt: [{ $size: { $ifNull: ["$lectures.summary.sections", []] } }, 0],
+        },
+        has_questions: {
+          $gt: [
+            {
+              $size: {
+                $filter: {
+                  input: { $ifNull: ["$lectures.questions", []] },
+                  as: "q",
+                  cond: nonEmpty("$$q.question"),
+                },
+              },
+            },
+            0,
+          ],
+        },
+        has_flash: {
+          $gt: [
+            {
+              $size: {
+                $filter: {
+                  input: { $ifNull: ["$lectures.flash_cards", []] },
+                  as: "c",
+                  cond: { $and: [nonEmpty("$$c.front"), nonEmpty("$$c.back")] },
+                },
+              },
+            },
+            0,
+          ],
+        },
+        has_written: {
+          $gt: [
+            {
+              $size: {
+                $filter: {
+                  input: { $ifNull: ["$lectures.written_exam.questions", []] },
+                  as: "w",
+                  cond: {
+                    $and: [nonEmpty("$$w.question"), nonEmpty("$$w.model_answer")],
+                  },
+                },
+              },
+            },
+            0,
+          ],
+        },
+      },
+    },
+  ]);
+  return rows;
 };

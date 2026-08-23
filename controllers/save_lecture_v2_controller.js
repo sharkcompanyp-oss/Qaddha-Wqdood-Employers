@@ -1,7 +1,11 @@
 import Exams from "../models/exam.js";
 import dotenv from "dotenv";
 import { allowSubject } from "../services/access.js";
-import { recomputeMoadalAvailability } from "../services/moadal_eligibility.js";
+import {
+  recomputeMoadalAvailability,
+  readCompletenessFromDb,
+  isEligibleFromReport,
+} from "../services/moadal_eligibility.js";
 
 dotenv.config();
 
@@ -56,45 +60,77 @@ export const Save_Lecture_V2 = async (req, res) => {
     if (!_id) return res.status(400).json({ message: "رمز المادة ناقص" });
     if (!lecture_id) return res.status(400).json({ message: "رمز المحاضرة ناقص" });
 
-    const exam = await Exams.findById(_id);
-    if (!exam) return res.status(404).json({ message: "المادة غير موجودة" });
+    // ── لا نُنزل المادة ──
+    // كان هنا findById يجلب الوثيقة كاملةً: نصّ كل محاضرة وملخّصها وأسئلتها،
+    // مئات الكيلوبايتات (وميغابايتات في مادةٍ كبيرة) على السلك في كل ضغطة حفظ،
+    // ثمّ لا يُكتب منها إلا الجزء الذي لُمس.
+    //
+    // الآن: القراءة الوحيدة هي حقلا المقرَّر السابقان — ولا تحدث إلا إن نقص
+    // أحدهما من الحمولة (فهما وحدهما ما يرجع إليه المنطق أدناه). والكتابة
+    // تجري في القاعدة بـ$set موضعيّ بلا نقل وثيقة.
+    const c0 = payload.curriculum;
+    const needsPrev =
+      c0 && typeof c0 === "object" &&
+      (c0.text === undefined || c0.source_file === undefined);
 
-    const lec = (exam.lectures || []).find(
-      (l) => String(l.lecture_id) === String(lecture_id),
-    );
-    if (!lec) return res.status(404).json({ message: "المحاضرة غير موجودة" });
+    const found = await Exams.findOne(
+      { _id, "lectures.lecture_id": String(lecture_id) },
+      needsPrev
+        ? { name: 1, moadal_available: 1, "lectures.$": 1 }
+        : { name: 1, moadal_available: 1 },
+    ).lean();
 
+    if (!found) {
+      // نفرّق بين «لا مادة» و«لا محاضرة» كما كان: الرسالتان تُرشدان لمكانين
+      const exists = await Exams.exists({ _id });
+      return res
+        .status(404)
+        .json({ message: exists ? "المحاضرة غير موجودة" : "المادة غير موجودة" });
+    }
+
+    // نسخةٌ للقراءة فقط — لا تُحفَظ، ولا تحمل إلا ما لزم للرجوع إليه
+    const lec = (found.lectures && found.lectures[0]) || {};
+    const exam = { _id, name: found.name, moadal_available: found.moadal_available };
+
+    // ما يُكتب فعلاً: مسارات موضعية داخل المحاضرة المطابِقة وحدها
+    const $set = {};
     const changed = [];
 
     if (typeof payload.name === "string" && payload.name.trim()) {
-      lec.name = payload.name.trim();
+      $set["lectures.$.name"] = payload.name.trim();
       changed.push("name");
     }
     if (payload.order !== undefined) {
-      lec.order = Number(payload.order) || 0;
+      $set["lectures.$.order"] = Number(payload.order) || 0;
       changed.push("order");
     }
 
     if (payload.curriculum !== undefined) {
       const c = payload.curriculum;
       if (c === null) {
-        lec.curriculum = { text: "", source_file: "", word_count: 0, updated_at: null };
+        $set["lectures.$.curriculum"] = {
+          text: "",
+          source_file: "",
+          word_count: 0,
+          updated_at: null,
+        };
         changed.push("curriculum:cleared");
       } else {
         const text = String(c.text ?? lec.curriculum?.text ?? "");
-        lec.curriculum = {
+        const cur = {
           text,
           source_file: String(c.source_file ?? lec.curriculum?.source_file ?? ""),
           word_count: words(text),
           updated_at: new Date(),
         };
-        changed.push(`curriculum:${lec.curriculum.word_count}كلمة`);
+        $set["lectures.$.curriculum"] = cur;
+        changed.push(`curriculum:${cur.word_count}كلمة`);
       }
     }
 
     if (payload.summary !== undefined) {
       if (payload.summary === null) {
-        lec.summary = { sections: [], word_count: 0 };
+        $set["lectures.$.summary"] = { sections: [], word_count: 0 };
         changed.push("summary:cleared");
       } else {
         const sections = Array.isArray(payload.summary.sections)
@@ -102,13 +138,16 @@ export const Save_Lecture_V2 = async (req, res) => {
           : Array.isArray(payload.summary)
             ? payload.summary
             : [];
-        lec.summary = { sections, word_count: summaryWords(sections) };
+        $set["lectures.$.summary"] = {
+          sections,
+          word_count: summaryWords(sections),
+        };
         changed.push(`summary:${sections.length}قسم`);
       }
     }
 
     if (Array.isArray(payload.questions)) {
-      lec.questions = payload.questions
+      const qs = payload.questions
         .filter((q) => q && String(q.question || "").trim())
         .map((q, i) => ({
           // نحفظ q_id الوارد إن وُجد: تقدّم الطالب مُسجَّل عليه،
@@ -118,11 +157,12 @@ export const Save_Lecture_V2 = async (req, res) => {
           options: fourOptions(q.options),
           answer: String(q.answer ?? ""),
         }));
-      changed.push(`questions:${lec.questions.length}`);
+      $set["lectures.$.questions"] = qs;
+      changed.push(`questions:${qs.length}`);
     }
 
     if (Array.isArray(payload.flash_cards)) {
-      lec.flash_cards = payload.flash_cards
+      const fc = payload.flash_cards
         .filter(
           (c) => c && (String(c.front || "").trim() || String(c.back || "").trim()),
         )
@@ -131,12 +171,13 @@ export const Save_Lecture_V2 = async (req, res) => {
           front: String(c.front || ""),
           back: String(c.back || ""),
         }));
-      changed.push(`flash:${lec.flash_cards.length}`);
+      $set["lectures.$.flash_cards"] = fc;
+      changed.push(`flash:${fc.length}`);
     }
 
     if (payload.written_exam !== undefined) {
       const w = payload.written_exam || {};
-      lec.written_exam = {
+      const we = {
         duration_min: Number(w.duration_min) > 0 ? Number(w.duration_min) : 30,
         questions: (Array.isArray(w.questions) ? w.questions : [])
           .filter((q) => q && String(q.question || "").trim())
@@ -146,24 +187,58 @@ export const Save_Lecture_V2 = async (req, res) => {
             model_answer: String(q.model_answer || ""),
           })),
       };
-      changed.push(`written:${lec.written_exam.questions.length}`);
+      $set["lectures.$.written_exam"] = we;
+      changed.push(`written:${we.questions.length}`);
     }
 
     if (changed.length === 0) {
       return res.status(200).json({ message: "لا تغييرات", changed: [] });
     }
 
-    const el = recomputeMoadal(exam);
-    if (el.changed) {
-      console.log(`[معدل] ${exam.name}: ${el.was} → ${el.now}`);
+    // ① الكتابة: $set موضعيّ على المحاضرة المطابِقة وحدها.
+    //    `lectures.$` يحتاج المحاضرة في المرشِّح — وهي فيه.
+    const w = await Exams.updateOne(
+      { _id, "lectures.lecture_id": String(lecture_id) },
+      { $set },
+    );
+    if (!w.matchedCount) {
+      // اختفت المحاضرة بين القراءة والكتابة (حذفٌ متزامن)
+      return res.status(409).json({ message: "تغيّرت المادة أثناء الحفظ — أعد الفتح" });
     }
-    await exam.save();
+
+    // ② الأهلية: تُحسب في القاعدة بعد الكتابة، وتُقرأ أعلاماً لا محتوى.
+    //    بعد الكتابة لا قبلها، وإلا حُسبت على حالةٍ تجاوزها الحفظ.
+    //
+    // وشبكة أمان: خطأُ هذا الحساب لا يُرى في اللوحة بل يظهر عند الطالب —
+    // يدفع ثمن «معدل» ويجد محتوى ناقصاً، وهي العلّة التي وُجدت هذه الوحدة
+    // لإصلاحها. فإن تعذّر الحساب في القاعدة أو خرج فارغاً بلا سبب، نرجع
+    // إلى الطريق المُجرَّب (تحميل الوثيقة) بدل كتابة علَمٍ قد يكون خاطئاً.
+    let now;
+    try {
+      const report = await readCompletenessFromDb(Exams, _id);
+      if (!report.length) throw new Error("تقرير فارغ");
+      now = isEligibleFromReport(report);
+    } catch (e) {
+      console.warn("[معدل] تعذّر الحساب في القاعدة، رجوعٌ إلى الوثيقة:", e.message);
+      const full = await Exams.findById(_id);
+      if (full) {
+        const el = recomputeMoadalAvailability(full);
+        now = el.now;
+        if (el.changed) await full.save();
+      }
+    }
+
+    const was = found.moadal_available === true;
+    if (now !== undefined && was !== now) {
+      await Exams.updateOne({ _id }, { $set: { moadal_available: now } });
+      console.log(`[معدل] ${exam.name}: ${was} → ${now}`);
+    }
 
     return res.status(200).json({
       message: "تم الحفظ",
       changed,
       lecture_id,
-      moadal_available: exam.moadal_available,
+      moadal_available: now === undefined ? found.moadal_available : now,
     });
   } catch (error) {
     console.error("Save_Lecture_V2:", error);
