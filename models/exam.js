@@ -176,7 +176,6 @@ const SUBJECTS_SCHEMA = mongoose.Schema({
   ID: { type: String, required: false },
   college_id: { type: Number, required: true },
   info: { type: String },
-  time: { type: Number, required: true },
   visible: { type: Boolean, default: false },
   available_to: { type: Array, default: [] },
   // مشتركو خطة «معدل» (يملكون أيضاً كل ما في «ترفيع» — موجودون في available_to كذلك)

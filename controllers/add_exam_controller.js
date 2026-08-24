@@ -11,7 +11,6 @@ export const Add_Exam = async (req, res) => {
       college_id,
       info,
       questions,
-      time,
       visible,
       price,
       price_moadal,
@@ -19,23 +18,14 @@ export const Add_Exam = async (req, res) => {
       summary,
     } = req.body;
 
-    // التحقق من الحقول المطلوبة
-    if (!name || !college_id || !questions || !time) {
+    // ── المادة تُنشأ فارغة ──
+    // كان الشرط يطلب `questions` غير فارغة، وهو من الهيكل القديم حين كانت
+    // الأسئلة على مستوى المادة. صارت داخل كل محاضرة، فالمادة الجديدة تُولد
+    // بحقولها وحدها وتُملأ محاضرةً محاضرة — واشتراط سؤالٍ هنا كان يمنع
+    // إنشاءها أصلاً، أو يدفع إلى حشو سؤالٍ وهميّ في حقلٍ ميت.
+    if (!name || !college_id) {
       return res.status(400).json({
-        error: "الحقول المطلوبة: name, college_id, questions, time",
-      });
-    }
-
-    // التحقق من صحة البيانات
-    if (!Array.isArray(questions) || questions.length === 0) {
-      return res.status(400).json({
-        error: "يجب أن تحتوي الأسئلة على عنصر واحد على الأقل",
-      });
-    }
-
-    if (typeof time !== "number" || time <= 0) {
-      return res.status(400).json({
-        error: "الوقت يجب أن يكون رقماً موجباً",
+        error: "الحقول المطلوبة: name, college_id",
       });
     }
 
@@ -49,8 +39,7 @@ export const Add_Exam = async (req, res) => {
       ID: String(New_ID),
       college_id,
       info: info || "",
-      questions,
-      time,
+      questions: Array.isArray(questions) ? questions : [],
       visible: visible ?? false,
       available_to: [],
       open_mode: true,
@@ -62,9 +51,12 @@ export const Add_Exam = async (req, res) => {
 
     await The_New_Exam.save();
 
+    // نعيد `_id` أيضاً: الواجهة تفتح مساحة العمل على المادة فور إنشائها،
+    // وهي تحتاج معرّف المستند لا الرقم التسلسلي.
     res.status(201).json({
       message: "تمت إضافة المادة بنجاح",
       exam_id: String(New_ID),
+      _id: String(The_New_Exam._id),
     });
   } catch (error) {
     console.error("خطأ في إضافة المادة:", error);

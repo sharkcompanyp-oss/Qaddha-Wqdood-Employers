@@ -16,7 +16,6 @@ const LIGHT_FIELDS = [
   "ID",
   "info",
   "college_id",
-  "time",
   "visible",
   "open_mode",
   "price",

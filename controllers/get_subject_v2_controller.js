@@ -23,7 +23,6 @@ const LIGHT = {
   ID: 1,
   info: 1,
   college_id: 1,
-  time: 1,
   visible: 1,
   open_mode: 1,
   price: 1,
