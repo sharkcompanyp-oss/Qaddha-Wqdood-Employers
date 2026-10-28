@@ -107,6 +107,11 @@ import {
   Get_Student_Ledger,
 } from "../controllers/award_points_controller.js";
 import {
+  Notify_Student_Status,
+  Notify_Subject_Audience,
+  Send_Notification,
+} from "../controllers/notify_controller.js";
+import {
   Get_App_AI_Config,
   Update_App_AI_Config,
 } from "../controllers/app_ai_controller.js";
@@ -208,6 +213,11 @@ router.post("/responde-to-complaint", Responde_To_Complaint);
 // ─── نظام النقاط (دفتر الحركات + المنح) ────────────────────────────────────
 router.post("/awardpoints", Award_Points);
 router.post("/studentledger", Get_Student_Ledger);
+
+// ─── إشعارات يدوية: لطالب بعينه أو لمشتركي مادة ─────────────────────────────
+router.post("/notify/student-status", Notify_Student_Status);
+router.post("/notify/subject-audience", Notify_Subject_Audience);
+router.post("/notify/send", Send_Notification);
 
 // ─── كيان المحاضرة (خطة «معدل») ────────────────────────────────────────────
 router.put("/updatelectures", Update_Lectures);
