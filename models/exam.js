@@ -193,7 +193,15 @@ const SUBJECTS_SCHEMA = mongoose.Schema({
     required: false,
     default: null,
   },
-  number_of_free_subscriptions: { type: Number, required: false, default: 0 },
+  // الاشتراكات المجانية تُعدّ لكل خطة على حدة: الإحصائيات تطرح المجاني من
+  // عدد مشتركي خطته لتحسب الربح، فعدّاد واحد كان يُخرج المعدل المجاني من
+  // ربح الترفيع ويُبقيه مدفوعاً في ربح المعدل.
+  number_of_free_subscriptions: { type: Number, required: false, default: 0 }, // ترفيع
+  number_of_free_moadal_subscriptions: {
+    type: Number,
+    required: false,
+    default: 0,
+  },
   total_profit: { type: Number, required: false, default: 0 },
   // ─── المصدر الواحد ───
   lectures: { type: [LectureSchema], default: [] },

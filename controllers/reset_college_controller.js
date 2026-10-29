@@ -90,7 +90,14 @@ export const Reset_College = async (req, res) => {
 
     const r = await Exams.updateMany(matchCollege(college_id), {
       // الاشتراكات وحدها. المحتوى والأسعار والظهور لا تُمَسّ.
-      $set: { available_to: [], available_to_moadal: [] },
+      // عدّادا المجاني يُصفَّران معها: بقاؤهما يطرح مجانيّي الفصل الماضي من
+      // مشتركي الفصل الجديد فتظهر أرباحه أقلّ من حقيقتها.
+      $set: {
+        available_to: [],
+        available_to_moadal: [],
+        number_of_free_subscriptions: 0,
+        number_of_free_moadal_subscriptions: 0,
+      },
     });
 
     const b = before[0] || { subjects: 0, students: 0, moadal: 0 };

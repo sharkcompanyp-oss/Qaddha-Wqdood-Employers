@@ -26,6 +26,7 @@ export const Add_Student_To_Exam = async (req, res) => {
       The_Exam.available_to = [];
       The_Exam.available_to_moadal = [];
       The_Exam.number_of_free_subscriptions = 0;
+      The_Exam.number_of_free_moadal_subscriptions = 0;
       await The_Exam.save();
 
       // لا مشترك ⇒ لا خطة: تُحذف خطط هذه المادة كلها ومهامها
@@ -68,9 +69,15 @@ export const Add_Student_To_Exam = async (req, res) => {
       The_Exam.available_to_moadal.push(sid);
     }
 
-    // ✅ تحديث عدد الاشتراكات المجانية
+    // ✅ تحديث عدد الاشتراكات المجانية — لكل خطة عدّادها، فالإحصائيات
+    // تطرح المجاني من مشتركي خطته هو
     if (is_free) {
-      The_Exam.number_of_free_subscriptions += 1;
+      if (is_moadal) {
+        The_Exam.number_of_free_moadal_subscriptions =
+          (Number(The_Exam.number_of_free_moadal_subscriptions) || 0) + 1;
+      } else {
+        The_Exam.number_of_free_subscriptions += 1;
+      }
     }
 
     // ✅ تحديث الأرباح (فقط للاشتراكات المدفوعة) — معدل بسعرها

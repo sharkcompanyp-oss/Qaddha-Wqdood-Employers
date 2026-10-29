@@ -26,6 +26,7 @@ export const Get_Analytics = async (req, res) => {
             price: { $ifNull: ["$price", 0] },
             price_moadal: { $ifNull: ["$price_moadal", 0] },
             free: { $ifNull: ["$number_of_free_subscriptions", 0] },
+            free_moadal: { $ifNull: ["$number_of_free_moadal_subscriptions", 0] },
             // الأرقام الجامعية نصاً وبلا تكرار: القوائم تحمل الرقم نصاً
             // أحياناً ورقماً أحياناً، فبدون التوحيد يُعدّ الطالب مرتين.
             tarfee_ids: {
@@ -71,7 +72,8 @@ export const Get_Analytics = async (req, res) => {
           // الربح = (مشتركو الترفيع − المجانيون) × السعر، ولا يقلّ عن صفر:
           // المجانيون قد يتجاوزون المشتركين في مادة تجريبية فيخرج رقم سالب
           // يُنقص الإجمالي بلا معنى.
-          // ويُضاف إليه ربح خطة «معدل» بسعرها المستقل.
+          // ويُضاف إليه ربح خطة «معدل» بسعرها المستقل، بعد طرح مجانيّيها
+          // (الاشتراك بالنقاط أو المجاني اليدوي) بالطريقة نفسها.
           $addFields: {
             profit_tarfi3: {
               $multiply: [
@@ -80,7 +82,15 @@ export const Get_Analytics = async (req, res) => {
               ],
             },
             profit_moadal: {
-              $multiply: ["$moadal_students", "$price_moadal"],
+              $multiply: [
+                {
+                  $max: [
+                    0,
+                    { $subtract: ["$moadal_students", "$free_moadal"] },
+                  ],
+                },
+                "$price_moadal",
+              ],
             },
           },
         },
@@ -89,7 +99,7 @@ export const Get_Analytics = async (req, res) => {
             total_profit: { $add: ["$profit_tarfi3", "$profit_moadal"] },
           },
         },
-        { $project: { free: 0, tarfee_ids: 0, moadal_ids: 0 } },
+        { $project: { tarfee_ids: 0, moadal_ids: 0 } },
         { $sort: { total_profit: -1 } },
       ]),
       Students.estimatedDocumentCount(),
