@@ -43,7 +43,8 @@ import { Generate_Items } from "../controllers/generate_controller.js";
 import {
   Claude_Status,
   Claude_Generate_Mcq,
-} from "../controllers/claude_mcq_controller.js";
+  Claude_Generate_Summary,
+} from "../controllers/claude_controller.js";
 import {
   Get_Prompts,
   Reset_Prompts,
@@ -193,9 +194,10 @@ router.post("/prompts/reset", Reset_Prompts);
 router.post("/production/gemini-models", Gemini_Models);
 router.post("/production/spellcheck", Spellcheck_Chunk);
 router.post("/production/generate", bigBody, Generate_Items);
-// توليد أسئلة MCQ بـ Claude — يعمل فور تعيين ANTHROPIC_API_KEY على الخادم
+// التوليد بـ Claude (أسئلة MCQ وملخّص) — يعمل فور تعيين ANTHROPIC_API_KEY على الخادم
 router.post("/production/claude-status", Claude_Status);
 router.post("/production/claude-mcq", bigBody, Claude_Generate_Mcq);
+router.post("/production/claude-summary", bigBody, Claude_Generate_Summary);
 // تفريغ الصوت — مسار الرفع مُركَّب في server.js قبل مُحلِّلات الجسم
 router.post("/production/transcribe-models", Transcribe_Models);
 router.post("/production/transcribe-status", Transcribe_Status);
