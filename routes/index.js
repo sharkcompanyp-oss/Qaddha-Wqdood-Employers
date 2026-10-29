@@ -47,6 +47,7 @@ import {
   Spellcheck_Chunk,
 } from "../controllers/spellcheck_controller.js";
 import { Generate_Items } from "../controllers/generate_controller.js";
+import { Course_Extract } from "../controllers/course_extract_controller.js";
 import {
   Claude_Status,
   Claude_Generate_Mcq,
@@ -210,6 +211,8 @@ router.post("/prompts/reset", Reset_Prompts);
 router.post("/production/gemini-models", Gemini_Models);
 router.post("/production/spellcheck", Spellcheck_Chunk);
 router.post("/production/generate", bigBody, Generate_Items);
+// تفريغ دورة: الملف مرفوعٌ سلفاً بمسار التفريغ الصوتي، وهنا رابطه فقط
+router.post("/production/course-extract", Course_Extract);
 // التوليد بـ Claude (أسئلة MCQ وملخّص) — يعمل فور تعيين ANTHROPIC_API_KEY على الخادم
 router.post("/production/claude-status", Claude_Status);
 router.post("/production/claude-mcq", bigBody, Claude_Generate_Mcq);
