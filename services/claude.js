@@ -115,6 +115,80 @@ export const runClaude = async ({ model, effort, skill, content, label }) => {
   return { text, msg };
 };
 
+// ─── Batch ────────────────────────────────────────────────────────────────────
+// نفس الطلب، يُرسَل دفعةً لا ينتظره الخادم: يعود معرّف الدفعة فوراً، والواجهة
+// تسأل عن النتيجة كل حين. نصف السعر، والنتيجة قد تتأخر (دقائق عادةً، وحتى
+// ٢٤ ساعة كحدٍّ أقصى) — ولا يُعلَّق أي طلبٍ في الخادم بانتظارها.
+// ⚠ fallbacks مرفوضة في Batches، فلا تُرسل هنا.
+
+const batchParams = ({ model, effort, skill, content }) => ({
+  model: model.id,
+  max_tokens: 64000,
+  output_config: { effort },
+  system: [
+    {
+      type: "text",
+      text: `<skill name="${skill}">\n${loadSkill(skill)}\n</skill>`,
+      cache_control: { type: "ephemeral" },
+    },
+  ],
+  messages: [{ role: "user", content }],
+});
+
+/** يرسل طلباً واحداً كدفعة ويعيد معرّفها فوراً */
+export const submitBatch = async ({ model, effort, skill, content, label }) => {
+  const anthropic = getClient();
+  if (!anthropic) {
+    throw new ClaudeError(
+      503,
+      "مفتاح Claude غير مضبوط — أضف ANTHROPIC_API_KEY في متغيّرات الخادم على Render",
+    );
+  }
+  const batch = await anthropic.messages.batches.create({
+    requests: [{ custom_id: "r1", params: batchParams({ model, effort, skill, content }) }],
+  });
+  console.log(`📦 Claude batch ${label || skill}: ${batch.id} · ${model.id} (${effort})`);
+  return batch.id;
+};
+
+/**
+ * حالة دفعة: { done:false, status } ما دامت تعمل، أو { done:true, text, msg }.
+ * يرمي ClaudeError إن انتهت بخطأ أو رفض أو انتهاء صلاحية.
+ */
+export const batchResult = async (batchId) => {
+  const anthropic = getClient();
+  if (!anthropic) throw new ClaudeError(503, "مفتاح Claude غير مضبوط");
+  const batch = await anthropic.messages.batches.retrieve(batchId);
+  if (batch.processing_status !== "ended") {
+    return { done: false, status: batch.processing_status };
+  }
+  for await (const r of await anthropic.messages.batches.results(batchId)) {
+    if (r.result.type !== "succeeded") {
+      const why =
+        r.result.type === "errored"
+          ? r.result.error?.error?.message || r.result.error?.message || "خطأ"
+          : r.result.type === "expired"
+            ? "انتهت صلاحية الدفعة قبل معالجتها"
+            : "أُلغيت الدفعة";
+      throw new ClaudeError(502, `فشلت دفعة Claude: ${why}`);
+    }
+    const msg = r.result.message;
+    if (msg.stop_reason === "refusal") {
+      throw new ClaudeError(422, "رفض Claude معالجة هذا المحتوى", msg.stop_details?.explanation || "");
+    }
+    const text = msg.content
+      .filter((b) => b.type === "text")
+      .map((b) => b.text)
+      .join("\n")
+      .trim();
+    console.log(
+      `📦 Claude batch ${batchId} انتهت: ${msg.model} · in ${msg.usage?.input_tokens} · out ${msg.usage?.output_tokens} · ${msg.stop_reason}`,
+    );
+    return { done: true, text, msg };
+  }
+  throw new ClaudeError(502, "انتهت الدفعة بلا نتيجة");
+};
+
 /** ترجمة أي خطأ إلى ردّ HTTP واضح بالعربية */
 export const sendClaudeError = (res, error, where) => {
   if (error instanceof ClaudeError) {

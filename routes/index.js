@@ -51,6 +51,8 @@ import {
   Claude_Status,
   Claude_Generate_Mcq,
   Claude_Generate_Summary,
+  Claude_Batch_Submit,
+  Claude_Batch_Result,
 } from "../controllers/claude_controller.js";
 import {
   Get_Prompts,
@@ -212,6 +214,9 @@ router.post("/production/generate", bigBody, Generate_Items);
 router.post("/production/claude-status", Claude_Status);
 router.post("/production/claude-mcq", bigBody, Claude_Generate_Mcq);
 router.post("/production/claude-summary", bigBody, Claude_Generate_Summary);
+// Batch: الإرسال يعود فوراً بمعرّف الدفعة، والنتيجة تُسأل عنها لاحقاً
+router.post("/production/claude-batch/submit", bigBody, Claude_Batch_Submit);
+router.post("/production/claude-batch/result", Claude_Batch_Result);
 // تفريغ الصوت — مسار الرفع مُركَّب في server.js قبل مُحلِّلات الجسم
 router.post("/production/transcribe-models", Transcribe_Models);
 router.post("/production/transcribe-status", Transcribe_Status);
