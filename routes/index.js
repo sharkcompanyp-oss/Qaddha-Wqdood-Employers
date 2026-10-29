@@ -32,6 +32,13 @@ import {
   R2_Status,
 } from "../controllers/r2_images_controller.js";
 import {
+  R2_Usage,
+  R2_List,
+  R2_Check_Usage,
+  R2_Delete,
+  R2_Delete_Folder,
+} from "../controllers/r2_browser_controller.js";
+import {
   Mistral_Upload,
   Mistral_Ocr,
 } from "../controllers/mistral_proxy_controller.js";
@@ -161,6 +168,13 @@ router.put("/v2/texts/link", Link_Text_To_Lecture);
 const bigBody = express.json({ limit: "80mb" });
 
 router.post("/production/r2-status", R2_Status);
+
+// ── تبويب «الصور»: تصفّح حاوية R2 وحذف ما فيها (للّوحة وحدها) ──
+router.post("/r2/usage", R2_Usage);
+router.post("/r2/list", R2_List);
+router.post("/r2/check-usage", R2_Check_Usage);
+router.post("/r2/delete", R2_Delete);
+router.post("/r2/delete-folder", R2_Delete_Folder);
 router.post("/production/upload-images", bigBody, Upload_Lecture_Images);
 router.post("/production/mistral-upload", bigBody, Mistral_Upload);
 router.post("/production/mistral-ocr", Mistral_Ocr);

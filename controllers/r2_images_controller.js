@@ -21,7 +21,7 @@ dotenv.config();
 //
 // المفتاح بصمةُ المحتوى: الصورة نفسها لا تُرفع مرتين مهما تكرّرت بين المحاضرات.
 
-const R2_READY = () =>
+export const R2_READY = () =>
   Boolean(
     process.env.R2_ACCOUNT_ID &&
       process.env.R2_ACCESS_KEY_ID &&
@@ -31,6 +31,9 @@ const R2_READY = () =>
   );
 
 let _client = null;
+export const r2Client = () => {
+  return client();
+};
 const client = () => {
   if (_client) return _client;
   _client = new S3Client({
