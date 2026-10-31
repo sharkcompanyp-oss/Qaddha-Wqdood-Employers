@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import { renderPrompt } from "../services/prompts.js";
 import { allowTool } from "../services/access.js";
+import { costCtx, recordGemini } from "../services/costs.js";
 
 dotenv.config();
 
@@ -148,6 +149,7 @@ export const Generate_Items = async (req, res) => {
     }
 
     const data = JSON.parse(raw);
+    recordGemini(costCtx(req, kind), data, use);
     const out = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
     const parsed = extractJson(out);
     if (!parsed) {

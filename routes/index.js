@@ -49,6 +49,22 @@ import {
 import { Generate_Items } from "../controllers/generate_controller.js";
 import { Course_Extract } from "../controllers/course_extract_controller.js";
 import {
+  Costs_Subject,
+  Costs_Log_Mistral,
+  Prices_Get,
+  Prices_Save,
+} from "../controllers/costs_controller.js";
+import {
+  Refunds_Student,
+  Refunds_Add,
+  Refunds_Delete,
+} from "../controllers/refunds_controller.js";
+import {
+  Earnings_Employer,
+  Finance_Get,
+  Finance_Save,
+} from "../controllers/earnings_controller.js";
+import {
   Claude_Status,
   Claude_Generate_Mcq,
   Claude_Generate_Summary,
@@ -213,6 +229,20 @@ router.post("/production/spellcheck", Spellcheck_Chunk);
 router.post("/production/generate", bigBody, Generate_Items);
 // تفريغ دورة: الملف مرفوعٌ سلفاً بمسار التفريغ الصوتي، وهنا رابطه فقط
 router.post("/production/course-extract", Course_Extract);
+
+// التكاليف: قراءة السجل والأسعار للوحة، وتسجيل مسح Mistral من الواجهة
+router.post("/costs/subject", Costs_Subject);
+router.post("/costs/log-mistral", Costs_Log_Mistral);
+router.post("/costs/prices", Prices_Get);
+router.post("/costs/prices/save", Prices_Save);
+
+// المرتجعات (اللوحة) ونسبة العضو (اللوحة لأي عضو، والعضو لنفسه)
+router.post("/refunds/student", Refunds_Student);
+router.post("/refunds/add", Refunds_Add);
+router.post("/refunds/delete", Refunds_Delete);
+router.post("/earnings/employer", Earnings_Employer);
+router.post("/earnings/finance", Finance_Get);
+router.post("/earnings/finance/save", Finance_Save);
 // التوليد بـ Claude (أسئلة MCQ وملخّص) — يعمل فور تعيين ANTHROPIC_API_KEY على الخادم
 router.post("/production/claude-status", Claude_Status);
 router.post("/production/claude-mcq", bigBody, Claude_Generate_Mcq);

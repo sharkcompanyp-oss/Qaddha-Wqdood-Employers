@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import { getPrompt } from "../services/prompts.js";
 import { allowTool } from "../services/access.js";
+import { costCtx, recordGemini } from "../services/costs.js";
 
 dotenv.config();
 
@@ -176,6 +177,7 @@ export const Spellcheck_Chunk = async (req, res) => {
     }
 
     const data = JSON.parse(raw);
+    recordGemini(costCtx(req, "spell"), data, use);
     const out = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
     const parsed = extractJson(out);
     if (!parsed) {

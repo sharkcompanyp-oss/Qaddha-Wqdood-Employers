@@ -1,6 +1,8 @@
 import Subjects from "../models/exam.js";
 import Students from "../models/student.js";
 import Admins from "../models/admin.js";
+import Refund from "../models/refund.js";
+import { REVENUE_STAGES } from "../services/revenue.js";
 
 // ─── الإحصائيات ───────────────────────────────────────────────────────────────
 // كانت ثلاثة find() بلا حدود: تُنزل **كل** وثيقة كاملةً — بأسئلتها وملخصاتها
@@ -13,98 +15,27 @@ import Admins from "../models/admin.js";
 export const Get_Analytics = async (req, res) => {
   try {
     // ثلاثتها مستقلّة، فتُنفَّذ معاً لا بالتتابع
-    const [rows, total_students, total_admins] = await Promise.all([
+    const [rows, total_students, total_admins, refundRows] = await Promise.all([
       Subjects.aggregate([
-        {
-          $project: {
-            _id: 0,
-            // مفتاح ثابت للمادة — الاستبعاد المحلي في الواجهة يُخزَّن به
-            sid: { $toString: "$_id" },
-            subject_id: "$ID",
-            subject_name: "$name",
-            college_id: 1,
-            price: { $ifNull: ["$price", 0] },
-            price_moadal: { $ifNull: ["$price_moadal", 0] },
-            free: { $ifNull: ["$number_of_free_subscriptions", 0] },
-            free_moadal: { $ifNull: ["$number_of_free_moadal_subscriptions", 0] },
-            // الأرقام الجامعية نصاً وبلا تكرار: القوائم تحمل الرقم نصاً
-            // أحياناً ورقماً أحياناً، فبدون التوحيد يُعدّ الطالب مرتين.
-            tarfee_ids: {
-              $setUnion: [
-                {
-                  $map: {
-                    input: { $ifNull: ["$available_to", []] },
-                    as: "x",
-                    in: { $toString: "$$x" },
-                  },
-                },
-              ],
-            },
-            moadal_ids: {
-              $setUnion: [
-                {
-                  $map: {
-                    input: { $ifNull: ["$available_to_moadal", []] },
-                    as: "x",
-                    in: { $toString: "$$x" },
-                  },
-                },
-              ],
-            },
-          },
-        },
-        {
-          // مشترك «معدل» يُكتب في القائمتين معاً (available_to و
-          // available_to_moadal)، لكنه دفع سعر «معدل» وحده لا السعرين.
-          // كان يُعدّ في ربح الترفيع ثم يُضاف ربح المعدل فوقه — اشتراكٌ
-          // واحد يُحسب مرتين. الترفيع الآن = من في available_to وليس معدلاً.
-          $addFields: {
-            tarfee_students: {
-              $size: { $setDifference: ["$tarfee_ids", "$moadal_ids"] },
-            },
-            moadal_students: { $size: "$moadal_ids" },
-            enrolled_students: {
-              $size: { $setUnion: ["$tarfee_ids", "$moadal_ids"] },
-            },
-          },
-        },
-        {
-          // الربح = (مشتركو الترفيع − المجانيون) × السعر، ولا يقلّ عن صفر:
-          // المجانيون قد يتجاوزون المشتركين في مادة تجريبية فيخرج رقم سالب
-          // يُنقص الإجمالي بلا معنى.
-          // ويُضاف إليه ربح خطة «معدل» بسعرها المستقل، بعد طرح مجانيّيها
-          // (الاشتراك بالنقاط أو المجاني اليدوي) بالطريقة نفسها.
-          $addFields: {
-            profit_tarfi3: {
-              $multiply: [
-                { $max: [0, { $subtract: ["$tarfee_students", "$free"] }] },
-                "$price",
-              ],
-            },
-            profit_moadal: {
-              $multiply: [
-                {
-                  $max: [
-                    0,
-                    { $subtract: ["$moadal_students", "$free_moadal"] },
-                  ],
-                },
-                "$price_moadal",
-              ],
-            },
-          },
-        },
-        {
-          $addFields: {
-            total_profit: { $add: ["$profit_tarfi3", "$profit_moadal"] },
-          },
-        },
-        { $project: { tarfee_ids: 0, moadal_ids: 0 } },
+        ...REVENUE_STAGES,
         { $sort: { total_profit: -1 } },
       ]),
       Students.estimatedDocumentCount(),
       Admins.estimatedDocumentCount(),
+      Refund.aggregate([
+        { $group: { _id: "$exam_id", amount: { $sum: "$amount" }, count: { $sum: 1 } } },
+      ]),
     ]);
+
+    // المرتجعات تُعرض بسطرها وحدها ولا تُطرح من الأرباح هنا — طرحها يجري في
+    // نسبة العضو فقط. تُلحق بكل مادة كي يسري عليها الاستبعاد في الواجهة.
+    const refundsBy = Object.fromEntries(refundRows.map((r) => [String(r._id), r]));
+    rows.forEach((r) => {
+      r.refunds = refundsBy[r.sid]?.amount || 0;
+      r.refunds_count = refundsBy[r.sid]?.count || 0;
+      delete r.employer;
+    });
+    const totalRefunds = rows.reduce((s, r) => s + r.refunds, 0);
 
     const totalProfit = rows.reduce((s, r) => s + (r.total_profit || 0), 0);
 
@@ -116,6 +47,7 @@ export const Get_Analytics = async (req, res) => {
           total_exams: rows.length,
           total_admins,
           total_profit: totalProfit,
+          total_refunds: totalRefunds,
         },
         profit_per_subject: rows,
       },

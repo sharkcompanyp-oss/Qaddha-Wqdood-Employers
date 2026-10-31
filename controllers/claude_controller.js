@@ -178,7 +178,7 @@ export const Claude_Generate_Mcq = async (req, res) => {
     if (!(await allowTool(req, res))) return;
     const { model, effort } = pickModel(req.body);
     const r = await REQUESTS.mcq(req.body);
-    const { text, msg } = await runClaude({ model, effort, ...r });
+    const { text, msg } = await runClaude({ model, effort, ...r, cost: costCtx(req, "mcq") });
     return res.status(200).json({
       text,
       requested: countOf(req.body),
@@ -204,7 +204,12 @@ export const Claude_Generate_Summary = async (req, res) => {
     if (!(await allowTool(req, res))) return;
     const { model, effort } = pickModel(req.body);
 
-    const facts = await runClaude({ model, effort, ...(await REQUESTS.summary_facts(req.body)) });
+    const facts = await runClaude({
+      model,
+      effort,
+      ...(await REQUESTS.summary_facts(req.body)),
+      cost: costCtx(req, "summary_facts"),
+    });
     factsText = facts.text;
     if (!factsText) throw new ClaudeError(502, "لم تُرجع المرحلة الأولى (الحقائق) أي نص");
 
@@ -212,6 +217,7 @@ export const Claude_Generate_Summary = async (req, res) => {
       model,
       effort,
       ...(await REQUESTS.summary_json({ ...req.body, facts: factsText })),
+      cost: costCtx(req, "summary_json"),
     });
     return res.status(200).json({
       sections: sectionsFrom(json.text, json.msg.stop_reason),
@@ -255,7 +261,7 @@ export const Claude_Batch_Result = async (req, res) => {
     if (!(await allowTool(req, res))) return;
     const { batch_id, kind } = req.body || {};
     if (!batch_id || !REQUESTS[kind]) throw new ClaudeError(400, "معرّف الدفعة أو نوعها ناقص");
-    const r = await batchResult(String(batch_id));
+    const r = await batchResult(String(batch_id), costCtx(req, kind));
     if (!r.done) return res.status(200).json(r);
     const base = { done: true, model: r.msg.model, stop_reason: r.msg.stop_reason };
     if (kind === "summary_json") {

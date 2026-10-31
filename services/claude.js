@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { readFileSync } from "fs";
+import { recordClaude } from "./costs.js";
 
 // ─── Claude: مصدر واحد لكل التوليد ────────────────────────────────────────────
 // الأسئلة والملخّص يمرّان من هنا: النماذج المسموحة، والمهارات، والطلب
@@ -62,8 +63,9 @@ export const pickModel = (body = {}) => {
 /**
  * طلبٌ واحد: مهارة في system (ثابتة ← مخزَّنة مؤقتاً) + محتوى المستخدم.
  * يعيد { text, msg }. يرمي ClaudeError عند غياب المفتاح أو الرفض.
+ * `cost`: سياق التسجيل (costCtx) — كلفة الطلب تُسجَّل حتى لو رُفض.
  */
-export const runClaude = async ({ model, effort, skill, content, label }) => {
+export const runClaude = async ({ model, effort, skill, content, label, cost }) => {
   const anthropic = getClient();
   if (!anthropic) {
     throw new ClaudeError(
@@ -92,6 +94,7 @@ export const runClaude = async ({ model, effort, skill, content, label }) => {
     messages: [{ role: "user", content }],
   });
   const msg = await stream.finalMessage();
+  if (cost) recordClaude(cost, msg);
 
   if (msg.stop_reason === "refusal") {
     throw new ClaudeError(
@@ -154,8 +157,9 @@ export const submitBatch = async ({ model, effort, skill, content, label }) => {
 /**
  * حالة دفعة: { done:false, status } ما دامت تعمل، أو { done:true, text, msg }.
  * يرمي ClaudeError إن انتهت بخطأ أو رفض أو انتهاء صلاحية.
+ * `cost`: سياق التسجيل — يُسجَّل مرةً واحدة مهما تكرّر السؤال (ref = الدفعة).
  */
-export const batchResult = async (batchId) => {
+export const batchResult = async (batchId, cost) => {
   const anthropic = getClient();
   if (!anthropic) throw new ClaudeError(503, "مفتاح Claude غير مضبوط");
   const batch = await anthropic.messages.batches.retrieve(batchId);
@@ -173,6 +177,7 @@ export const batchResult = async (batchId) => {
       throw new ClaudeError(502, `فشلت دفعة Claude: ${why}`);
     }
     const msg = r.result.message;
+    if (cost) recordClaude(cost, msg, { batch: true, ref: `claude-batch:${batchId}` });
     if (msg.stop_reason === "refusal") {
       throw new ClaudeError(422, "رفض Claude معالجة هذا المحتوى", msg.stop_details?.explanation || "");
     }

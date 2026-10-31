@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import { getPrompt } from "../services/prompts.js";
 import { allowTool, employerOf } from "../services/access.js";
+import { costCtx, recordGemini } from "../services/costs.js";
 
 dotenv.config();
 
@@ -253,6 +254,7 @@ export const Transcribe_Run = async (req, res) => {
     }
 
     const data = JSON.parse(raw);
+    recordGemini(costCtx(req, "transcribe"), data, use);
     const cand = data?.candidates?.[0];
     const out = cand?.content?.parts?.map((p) => p.text || "").join("") || "";
     if (!out.trim()) {
