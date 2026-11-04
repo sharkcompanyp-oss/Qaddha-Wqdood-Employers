@@ -64,6 +64,7 @@ import {
   Finance_Get,
   Finance_Save,
 } from "../controllers/earnings_controller.js";
+import { Student_Set_Password } from "../controllers/student_password_controller.js";
 import {
   Claude_Status,
   Claude_Generate_Mcq,
@@ -243,6 +244,7 @@ router.post("/refunds/delete", Refunds_Delete);
 router.post("/earnings/employer", Earnings_Employer);
 router.post("/earnings/finance", Finance_Get);
 router.post("/earnings/finance/save", Finance_Save);
+router.post("/student/password", Student_Set_Password);
 // التوليد بـ Claude (أسئلة MCQ وملخّص) — يعمل فور تعيين ANTHROPIC_API_KEY على الخادم
 router.post("/production/claude-status", Claude_Status);
 router.post("/production/claude-mcq", bigBody, Claude_Generate_Mcq);
