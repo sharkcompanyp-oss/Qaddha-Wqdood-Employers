@@ -26,7 +26,11 @@ const ALWAYS_HUMAN = new Set(["different_curriculum", "other_error"]);
 
 // ── تحديد المادة والمحاضرة ────────────────────────────────────────────────────
 
-/** يفتح المادة: بالمعرّف أولاً (حاسم)، ثم بالاسم (للشكاوى القديمة) */
+/**
+ * يفتح المادة: بمعرّفها أولاً (حاسم — التطبيق يرسله مع كل شكوى). الاسم وحده
+ * للشكاوى القديمة، ولا يُقبل إلا إن دلّ على مادةٍ واحدة: الاسم نفسه يتكرر
+ * بين الكليات، فإن تعدّد حُصر في المادة التي الطالبُ الشاكي مشتركٌ فيها.
+ */
 async function resolveSubject(c) {
   if (c.subject_id) {
     const byId = await Subject.findById(c.subject_id).catch(() => null);
@@ -36,9 +40,20 @@ async function resolveSubject(c) {
   const matches = await Subject.find({ name: c.subject_name });
   if (matches.length === 0)
     return { error: `لم أجد المادة '${c.subject_name}'.` };
-  if (matches.length > 1)
-    return { error: `أكثر من مادة بالاسم '${c.subject_name}' — غامض.` };
-  return { subject: matches[0] };
+  if (matches.length === 1) return { subject: matches[0] };
+
+  const sid = String(c.student_ID ?? "");
+  const mine = sid
+    ? matches.filter((s) =>
+        [...(s.available_to || []), ...(s.available_to_moadal || [])]
+          .map(String)
+          .includes(sid),
+      )
+    : [];
+  if (mine.length === 1) return { subject: mine[0] };
+  return {
+    error: `أكثر من مادة بالاسم '${c.subject_name}' ولا معرّف في الشكوى — غامض.`,
+  };
 }
 
 /** يحدّد المحاضرة داخل المادة ويعيد فهرسها (المسار للكتابة يحتاج الفهرس) */

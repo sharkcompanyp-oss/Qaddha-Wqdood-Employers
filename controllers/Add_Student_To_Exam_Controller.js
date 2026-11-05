@@ -1,6 +1,7 @@
 import Subjects from "../models/exam.js";
 import Admin from "../models/admin.js";
 import { purgeAllPlansOfSubject } from "../services/purge_plans.js";
+import { isPanel } from "../services/access.js";
 
 /**
  * @param {import('express').Request} req
@@ -9,6 +10,10 @@ import { purgeAllPlansOfSubject } from "../services/purge_plans.js";
 export const Add_Student_To_Exam = async (req, res) => {
   try {
     const { STUDENT_ID, EXAM_ID, is_free, is_moadal } = req.body;
+    // للّوحة وحدها: كان بلا أي تحقّق (أيّ أحدٍ يضيف طلاباً أو يصفّي مشتركي
+    // أي مادة بـ0000). والعضو مستثنى عمداً: نسبته من الإيرادات، والإيرادات
+    // من عدد المشتركين — فلا يملك أن يضيفهم.
+    if (!isPanel(req)) return res.status(401).json({ message: "غير مصرّح" });
 
     // التحقق من البيانات
     if (!STUDENT_ID || !EXAM_ID || STUDENT_ID.trim() === "") {

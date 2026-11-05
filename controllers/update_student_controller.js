@@ -1,10 +1,13 @@
 import Student from "../models/student.js";
+import { isPanel } from "../services/access.js";
 /**
  * @param {import('express').Request} req
  * @param {import('express').Response} res
  */
 export const Update_Student = async (req, res) => {
   try {
+    // كان بلا تحقّق: أيّ أحدٍ يغيّر اسم طالبٍ ورقمه الجامعي
+    if (!isPanel(req)) return res.status(401).json({ message: "غير مصرّح" });
     const { name, ID, new_name, new_id, new_college_id } = req.body;
     const The_Student = await Student.findOne({ ID: ID });
     The_Student.name = new_name;

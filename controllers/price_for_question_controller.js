@@ -1,8 +1,11 @@
 import Admins from "../models/admin.js";
 import Exams from "../models/exam.js";
+import { isPanel } from "../services/access.js";
 
 export const set_price_for_question = async (req, res) => {
   try {
+    // يعيد تسعير كل المواد دفعةً واحدة — كان مفتوحاً لأي أحد بلا تحقّق
+    if (!isPanel(req)) return res.status(401).json({ message: "غير مصرّح" });
     const { _id, new_price } = req.body;
 
     if (!_id) {

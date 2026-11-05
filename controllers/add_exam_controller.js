@@ -1,4 +1,5 @@
 import Exams from "../models/exam.js";
+import { isPanel } from "../services/access.js";
 
 /**
  * @param {import('express').Request} req
@@ -6,6 +7,8 @@ import Exams from "../models/exam.js";
  */
 export const Add_Exam = async (req, res) => {
   try {
+    // إنشاء مادة قرارُ اللوحة وحدها — كان مفتوحاً بلا تحقّق
+    if (!isPanel(req)) return res.status(401).json({ message: "غير مصرّح" });
     const {
       name,
       college_id,

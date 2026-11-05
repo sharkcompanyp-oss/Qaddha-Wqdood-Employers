@@ -1,4 +1,5 @@
 import Exams from "../models/exam.js";
+import { allowSubject } from "../services/access.js";
 
 // ─── جلب مادة بنطاق محدَّد ────────────────────────────────────────────────────
 // المادة الواحدة تزن ~294 KB (أسئلة 102 + ملخص 176)، وأغلب الشاشات لا تحتاج
@@ -65,6 +66,8 @@ export const Get_One_Subject = async (req, res) => {
     if (!_id) {
       return res.status(400).json({ message: "معرّف المادة مطلوب" });
     }
+    // كان يعيد المادة كاملةً (أسئلتها وملخصاتها) لأي أحد بلا تحقّق
+    if (!(await allowSubject(req, res, _id))) return;
 
     // قراءة واحدة، ثم تُشتق النطاقات منها في الذاكرة
     const doc = await Exams.findById(_id).lean();
