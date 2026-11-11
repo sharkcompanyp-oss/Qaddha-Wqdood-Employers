@@ -1,11 +1,10 @@
-// كنترولر وكيل معالجة الشكاوى + إعداداته + رفع نصوص المحاضرات.
+// كنترولر وكيل معالجة الشكاوى + إعداداته.
 // محمي بكلمة مرور اللوحة (نفس نمط بقية الكنترولرات).
 
 import dotenv from "dotenv";
 import { runAgent } from "../services/agent/runner.js";
 import { listAvailableModels } from "../services/agent/provider.js";
 import AgentSetting from "../models/agent_setting.js";
-import LectureText from "../models/lecture_text.js";
 
 dotenv.config();
 
@@ -17,12 +16,11 @@ function checkPassword(req, res) {
   return true;
 }
 
-// GET إعدادات الوكيل + النماذج المتاحة + عدد نصوص المحاضرات
+// GET إعدادات الوكيل + النماذج المتاحة
 export const Get_Agent_Config = async (req, res) => {
   try {
     let setting = await AgentSetting.findOne({ key: "default" });
     if (!setting) setting = await AgentSetting.create({ key: "default" });
-    const lectureCount = await LectureText.estimatedDocumentCount();
     // القائمة الحيّة الكاملة من الـ API (تُحدّث تلقائياً)
     const available_models = await listAvailableModels({
       gemini: process.env.GEMINI_API_KEY,
@@ -40,7 +38,6 @@ export const Get_Agent_Config = async (req, res) => {
         reply_examples: setting.reply_examples || [],
       },
       available_models,
-      lecture_count: lectureCount,
       keys_present: {
         gemini: !!process.env.GEMINI_API_KEY,
         openrouter: !!process.env.OPENROUTER_API_KEY,
@@ -98,77 +95,5 @@ export const Run_Agent = async (req, res) => {
     res.status(200).json(summary);
   } catch (e) {
     res.status(500).json({ message: "فشل تشغيل الوكيل", error: e.message });
-  }
-};
-
-// POST رفع نصوص محاضرات (دفعة). كل عنصر: {section, subject, file, text}
-// يُحدّث بالمفتاح rel_path (idempotent).
-export const Upload_Lectures = async (req, res) => {
-  if (!checkPassword(req, res)) return;
-  try {
-    const items = Array.isArray(req.body?.lectures) ? req.body.lectures : [];
-    if (!items.length)
-      return res.status(400).json({ message: "لا توجد محاضرات للرفع" });
-
-    let upserted = 0;
-    const skipped = [];
-    for (const it of items) {
-      const section = (it.section || "").trim();
-      const subject = (it.subject || "").trim();
-      const file = (it.file || "").trim();
-      const text = it.text || "";
-      if (!section || !subject || !file || !text.trim()) {
-        skipped.push(file || "(بلا اسم)");
-        continue;
-      }
-      const rel_path = `${section}/${subject}/${file}`;
-      await LectureText.updateOne(
-        { rel_path },
-        {
-          $set: {
-            section,
-            subject,
-            file,
-            rel_path,
-            text,
-            chars: text.length,
-            updated_at: new Date(),
-          },
-        },
-        { upsert: true },
-      );
-      upserted += 1;
-    }
-    const total = await LectureText.estimatedDocumentCount();
-    res.status(200).json({
-      message: `تم رفع/تحديث ${upserted} محاضرة`,
-      upserted,
-      skipped,
-      total,
-    });
-  } catch (e) {
-    res.status(500).json({ message: "فشل رفع المحاضرات", error: e.message });
-  }
-};
-
-// GET ملخّص نصوص المحاضرات (قسم → مادة → عدد) لعرضه في اللوحة
-export const Get_Lectures_Summary = async (req, res) => {
-  try {
-    const rows = await LectureText.aggregate([
-      {
-        $group: {
-          _id: { section: "$section", subject: "$subject" },
-          count: { $sum: 1 },
-        },
-      },
-    ]);
-    const tree = {};
-    for (const r of rows) {
-      const sec = (tree[r._id.section] ||= {});
-      sec[r._id.subject] = r.count;
-    }
-    res.status(200).json({ tree, total: rows.reduce((a, r) => a + r.count, 0) });
-  } catch (e) {
-    res.status(500).json({ message: "خطأ في ملخّص المحاضرات", error: e.message });
   }
 };

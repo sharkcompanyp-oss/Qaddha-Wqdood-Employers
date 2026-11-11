@@ -7,6 +7,7 @@ import {
   Get_Exams_Index,
 } from "../controllers/get_exams_controller.js";
 import { Add_Exam } from "../controllers/add_exam_controller.js";
+import { Clone_Exam } from "../controllers/clone_exam_controller.js";
 import { Delete_Student } from "../controllers/delete_student_controller.js";
 import { Delete_Exam } from "../controllers/delete_exam_controller.js";
 import { Update_Student } from "../controllers/update_student_controller.js";
@@ -117,8 +118,6 @@ import {
   Get_Agent_Config,
   Update_Agent_Config,
   Run_Agent,
-  Upload_Lectures,
-  Get_Lectures_Summary,
 } from "../controllers/agent_controller.js";
 import { Employer_Login } from "../controllers/employer_login_controller.js";
 import { Get_Employer_Subjects } from "../controllers/get_employer_subjects_controller.js";
@@ -157,6 +156,7 @@ router.post("/exams/tree", Get_Exams_Tree);
 router.post("/exams/names", Get_Exams_Names);
 router.post("/exams/index", Get_Exams_Index);
 router.post("/addexam", Add_Exam);
+router.post("/exams/clone", Clone_Exam);
 router.delete("/deletestudent", Delete_Student);
 router.delete("/deleteexam", Delete_Exam);
 router.delete("/deletescore", Delete_Score);
@@ -295,8 +295,6 @@ router.post("/appai/config/update", Update_App_AI_Config);
 router.get("/agent/config", Get_Agent_Config);
 router.post("/agent/config", Update_Agent_Config);
 router.post("/agent/run", Run_Agent);
-router.post("/agent/upload-lectures", Upload_Lectures);
-router.get("/agent/lectures-summary", Get_Lectures_Summary);
 
 // ─── العضوون ──────────────────────────────────────────────────────────────────
 router.post("/employerlogin", Employer_Login);

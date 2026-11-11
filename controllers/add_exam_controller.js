@@ -1,5 +1,6 @@
 import Exams from "../models/exam.js";
 import { isPanel } from "../services/access.js";
+import { nextSubjectID } from "../services/subjectId.js";
 
 /**
  * @param {import('express').Request} req
@@ -32,9 +33,8 @@ export const Add_Exam = async (req, res) => {
       });
     }
 
-    // جلب آخر ID (مرتّب)
-    const Last_Exam = await Exams.findOne().sort({ ID: -1 }).lean();
-    const New_ID = Last_Exam ? Number(Last_Exam.ID) + 1 : 1;
+    // الرقم التالي بأكبر قيمةٍ عددية — الترتيب النصّي كان يكرّر رقماً موجوداً
+    const New_ID = await nextSubjectID();
 
     // إنشاء المادة الجديد
     const The_New_Exam = new Exams({
