@@ -67,6 +67,11 @@ import {
 } from "../controllers/earnings_controller.js";
 import { Student_Set_Password } from "../controllers/student_password_controller.js";
 import {
+  Devices_Overview,
+  Devices_Student,
+  Devices_Block,
+} from "../controllers/devices_controller.js";
+import {
   Claude_Status,
   Claude_Generate_Mcq,
   Claude_Generate_Summary,
@@ -245,6 +250,10 @@ router.post("/earnings/employer", Earnings_Employer);
 router.post("/earnings/finance", Finance_Get);
 router.post("/earnings/finance/save", Finance_Save);
 router.post("/student/password", Student_Set_Password);
+// ─── الأجهزة: تعدد الأجهزة على الحساب الواحد + حظر جهاز بعينه ────────────────
+router.post("/devices/overview", Devices_Overview);
+router.post("/devices/student", Devices_Student);
+router.post("/devices/block", Devices_Block);
 // التوليد بـ Claude (أسئلة MCQ وملخّص) — يعمل فور تعيين ANTHROPIC_API_KEY على الخادم
 router.post("/production/claude-status", Claude_Status);
 router.post("/production/claude-mcq", bigBody, Claude_Generate_Mcq);
