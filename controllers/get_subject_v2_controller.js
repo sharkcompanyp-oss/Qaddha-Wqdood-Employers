@@ -31,6 +31,7 @@ const LIGHT = {
   admin_id: 1,
   employer: 1,
   number_of_free_subscriptions: 1,
+  number_of_free_moadal_subscriptions: 1,
   // قائمة المسجَّلين: تعديلها من لوحة بيانات المادة يحتاج قراءتها أولاً.
   // بدونها كان الحقل يصل فارغاً فيُحفَظ فارغاً — أي إلغاء تسجيل الجميع.
   available_to: 1,

@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Exams from "../models/exam.js";
 import Admins from "../models/admin.js"; // تأكد من الاسم الصحيح
 import Employers from "../models/employer.js";
@@ -24,6 +25,13 @@ export const Update_Exam = async (req, res) => {
       new_price,
       new_price_moadal,
       new_summary,
+      // ─── حقول لوحة «بيانات المادة» — كلٌّ اختياري، والغياب = لا تلمس ───
+      new_college_id,
+      new_visible,
+      new_free, // عدد الاشتراكات المجانية في ترفيع
+      new_free_moadal, // عدد الاشتراكات المجانية في معدل
+      new_available_to_moadal,
+      new_employer, // _id العضو، أو null/"" لإلغاء التسليم
       // ─── حقول مسار العضو ───
       employee, // true إذا كان الحفظ صادراً من تطبيق العضو
       employer_id, // _id العضو
@@ -86,6 +94,52 @@ export const Update_Exam = async (req, res) => {
       return res.status(200).json({ message: "تم حفظ تعديلات الأسئلة" });
     }
 
+    // ─── فحص الحقول الاختيارية قبل أي كتابة ─────────────────────────────────
+    // كل الرفض هنا، قبل أن يُمسّ الأدمن أو المادة: قيمةٌ فاسدة في حقلٍ
+    // واحد لا يجوز أن تمرّ نصفَ حفظ.
+    const bad = (message) => res.status(400).json({ message });
+
+    let next_college;
+    if (new_college_id !== undefined) {
+      next_college = Number(new_college_id);
+      if (!Number.isInteger(next_college) || next_college <= 0) {
+        return bad("رمز الكلية غير صالح");
+      }
+    }
+    if (new_visible !== undefined && typeof new_visible !== "boolean") {
+      return bad("قيمة الظهور غير صالحة");
+    }
+    const asCount = (v) => {
+      const n = Number(v);
+      return Number.isInteger(n) && n >= 0 ? n : null;
+    };
+    if (new_free !== undefined && asCount(new_free) === null) {
+      return bad("عدد الاشتراكات المجانية (ترفيع) غير صالح");
+    }
+    if (new_free_moadal !== undefined && asCount(new_free_moadal) === null) {
+      return bad("عدد الاشتراكات المجانية (معدل) غير صالح");
+    }
+    if (
+      new_available_to_moadal !== undefined &&
+      !Array.isArray(new_available_to_moadal)
+    ) {
+      return bad("قائمة مشتركي معدل غير صالحة");
+    }
+    let next_employer; // undefined = لا تلمس، null = إلغاء التسليم
+    if (new_employer !== undefined) {
+      if (new_employer === null || new_employer === "") {
+        next_employer = null;
+      } else {
+        if (!mongoose.isValidObjectId(new_employer)) {
+          return bad("معرّف العضو غير صالح");
+        }
+        if (!(await Employers.exists({ _id: new_employer }))) {
+          return res.status(404).json({ message: "العضو غير موجود" });
+        }
+        next_employer = String(new_employer);
+      }
+    }
+
     // حقل المشتركين وحده كان يفلت من حارس «الغياب ≠ الحذف»: القيمة تُطبَّع
     // إلى [] قبل الفحص، فتصبح `[] !== undefined` صحيحة دائماً ويُسند المصفوفة
     // الفارغة فوق المشتركين. حمولةٌ لا تذكر المشتركين كانت تمحوهم جميعاً.
@@ -110,7 +164,8 @@ export const Update_Exam = async (req, res) => {
 
     let profit_to_add = 0;
     if (difference > 0) {
-      profit_to_add = difference * new_price;
+      // السعر قد يغيب عن الحمولة — NaN هنا كان سيُفسد رصيد الأدمن
+      profit_to_add = difference * (Number(new_price ?? The_Exam.price) || 0);
     }
 
     // الحصول على الأدمن
@@ -156,10 +211,51 @@ export const Update_Exam = async (req, res) => {
         ).filter((id) => !removedSet.has(String(id)));
       }
     }
+    // ── قائمة «معدل» ──────────────────────────────────────────────────────
+    // معدل تشمل ترفيع: من في معدل يجب أن يكون في available_to أيضاً، فيُضاف
+    // إليها إن لم يكن. ومن أُخرج من ترفيع في الحفظ نفسه يبقى خارج معدل —
+    // الإخراج الصريح يغلب.
+    let moadal_added_to_tarfee = 0;
+    if (new_available_to_moadal !== undefined) {
+      const removedSet = new Set(removed_students);
+      const next_moadal = [
+        ...new Set(
+          new_available_to_moadal
+            .filter((x) => x !== null && x !== undefined)
+            .map((x) => String(x).trim())
+            .filter(Boolean),
+        ),
+      ].filter((id) => !removedSet.has(id));
+      The_Exam.available_to_moadal = next_moadal;
+
+      const tarfee = new Set(
+        (Array.isArray(The_Exam.available_to) ? The_Exam.available_to : []).map(
+          String,
+        ),
+      );
+      const missing = next_moadal.filter((id) => !tarfee.has(id));
+      if (missing.length > 0) {
+        The_Exam.available_to = [
+          ...(Array.isArray(The_Exam.available_to) ? The_Exam.available_to : []),
+          ...missing,
+        ];
+        moadal_added_to_tarfee = missing.length;
+      }
+    }
+
     setIf("price", new_price);
     if (new_price_moadal !== undefined) {
       The_Exam.price_moadal = Number(new_price_moadal) || 0;
     }
+    if (next_college !== undefined) The_Exam.college_id = next_college;
+    if (new_visible !== undefined) The_Exam.visible = new_visible;
+    if (new_free !== undefined) {
+      The_Exam.number_of_free_subscriptions = asCount(new_free);
+    }
+    if (new_free_moadal !== undefined) {
+      The_Exam.number_of_free_moadal_subscriptions = asCount(new_free_moadal);
+    }
+    if (next_employer !== undefined) The_Exam.employer = next_employer;
     // قبل The_Exam.save()
     console.log("new_summary received:", JSON.stringify(new_summary, null, 2));
     console.log("summary length:", new_summary?.length);
@@ -200,6 +296,7 @@ export const Update_Exam = async (req, res) => {
       new_count,
       removed_students: removed_students.length,
       purged_plans: purged.plans,
+      moadal_added_to_tarfee,
     });
   } catch (error) {
     console.log(error);
