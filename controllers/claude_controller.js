@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import { allowTool } from "../services/access.js";
 import { renderPrompt } from "../services/prompts.js";
+import { costCtx } from "../services/costs.js";
 import {
   MODELS,
   EFFORTS,

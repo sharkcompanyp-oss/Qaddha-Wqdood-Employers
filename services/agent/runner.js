@@ -168,7 +168,13 @@ function pickTarget(c, lecture) {
     // شاشة الإبلاغ ترسل اقتباس الطالب داخل نصّ الشكوى بين «…». نستخرجه
     // ونقتطع ما حوله: عرض خمسين ألف حرف على النموذج يُغرق الموضع المقصود،
     // ويجعل fix.old يقع على تكرارٍ آخر من الكلمة نفسها في مكانٍ بعيد.
-    const quoted = String(c.complaint || "").match(/«([^»]{3,400})»/);
+    // الموقع صار يرسل الاقتباس في item_text مستقلاً عن ملاحظة الطالب؛
+    // والنسخ الأقدم (والتطبيق) تضعه في نصّ الشكوى بين «…» — نقرأ الاثنين.
+    const ownQuote = String(c.item_text || "").trim();
+    const quoted =
+      ownQuote.length >= 3
+        ? [ownQuote, ownQuote.slice(0, 400)]
+        : String(c.complaint || "").match(/«([^»]{3,400})»/);
     let excerpt = text;
     let offset = 0;
     if (quoted) {
