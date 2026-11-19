@@ -110,6 +110,8 @@ import { Reject_Request } from "../controllers/reject_request_controller.js";
 import { Accept_Request } from "../controllers/accept_request_controller.js";
 import { Get_Analytics } from "../controllers/analytics_controller.js";
 import { Get_Student_Plans } from "../controllers/get_student_plans_controller.js";
+import { Moadal_Overview, Moadal_Plan } from "../controllers/moadal_controller.js";
+import { Ops_Overview } from "../controllers/ops_controller.js";
 import { Get_Fix_Log } from "../controllers/get_fix_log_controller.js";
 import {
   Preview_Reset_College,
@@ -273,6 +275,9 @@ router.post("/acceptrequest", Accept_Request);
 router.get("/analytics", Get_Analytics);
 // خطط طالب — للاطّلاع عند مطالبة استرداد
 router.post("/student/plans", Get_Student_Plans);
+router.post("/moadal/overview", Moadal_Overview);
+router.post("/moadal/plan", Moadal_Plan);
+router.post("/ops/overview", Ops_Overview);
 // سجلّ تصحيحات وكيل الشكاوى — الشكاوى المعالَجة تُحذف وأثرها هنا
 router.post("/agent/fix-log", Get_Fix_Log);
 // تصفير كلية في نهاية الفصل — الاشتراكات وحدها، بمعاينة وتأكيد صريح
